@@ -93,7 +93,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         HAL_UARTEx_ReceiveToIdle_DMA(&huart1, g_usart_rx_buf, USART_REC_LEN);
     }
 }
-验证 ：通过串口调试助手给*IDN? 看看是否能有对应的值打印出来
+验证 ：通过串口调试助手 打印*IDN? 看看是否能有对应的值打印出来
 
 /**********************************   END    **********************************/
 
