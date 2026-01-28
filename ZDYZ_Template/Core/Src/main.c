@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
+#include "fdcan.h"
 #include "quadspi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -25,9 +27,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "./BSP/LED/led.h"
-#include "./BSP/KEY/key.h"
-#include "./BSP/MPU/mpu.h"
 
 /* USER CODE END Includes */
 
@@ -109,12 +108,31 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-    MX_GPIO_Init();
-    MX_USART1_UART_Init();
-   // MX_QUADSPI_Init();
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_USART1_UART_Init();
+  //MX_QUADSPI_Init();
+  MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
-   led_init();   
+   led_init();
+    LED0(0);   
    printf("test start \r\n");
+   printf("test start  -->CAN\r\n");
+   //printf SCPI-message
+   SCPI_Config_Init();
+   
+    FDCAN_FilterTypeDef sFilterConfig;
+    sFilterConfig.IdType = FDCAN_STANDARD_ID;      /* ������׼֡ */
+    sFilterConfig.FilterIndex = 0;                 /* ʹ�� 0 �Ź����� */
+    sFilterConfig.FilterType = FDCAN_FILTER_MASK;  /* ����ģʽ����õ�ģʽ */
+    sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0; /* �յ������ FIFO 0 */
+    sFilterConfig.FilterID1 = 0x000;               /* ���� ID1 */
+    sFilterConfig.FilterID2 = 0x000;               /* ���룺��Ϊ 0 ����������б�׼֡ */
+
+    HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig);
+    HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0);
+   
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -157,7 +175,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 5;
   RCC_OscInitStruct.PLL.PLLN = 192;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
@@ -187,7 +205,31 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+    FDCAN_RxHeaderTypeDef RxHeader;
+    uint8_t RxData[8];
 
+    if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
+    {
+        /* �� FIFO 0 �а����ݰγ��� */
+        HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData);
+        
+        /* �򵥲��ԣ��յ�ʲô��������ԭ������ȥ�����ԣ� */
+        FDCAN_TxHeaderTypeDef TxHeader;
+        TxHeader.Identifier = RxHeader.Identifier + 1; // �� ID �� 1������۲�
+        TxHeader.IdType = FDCAN_STANDARD_ID;
+        TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+        TxHeader.DataLength = RxHeader.DataLength;
+        TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+        TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+        TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
+        TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+        TxHeader.MessageMarker = 0;
+        
+        HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &TxHeader, RxData);
+    }
+}
 /* USER CODE END 4 */
 
  /* MPU Configuration */

@@ -21,7 +21,7 @@
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
-
+#include "./BSP/LED/led.h"
 /******************************************************************************************/
 /* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â´ï¿½ï¿½ï¿½, Ö§ï¿½ï¿½printfï¿½ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÒªÑ¡ï¿½ï¿½use MicroLIB */
 
@@ -33,34 +33,17 @@ __asm(".global __ARM_use_no_argv \n\t");    /* AC6ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½main
 #else
 /* Ê¹ï¿½ï¿½AC5ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±, Òªï¿½ï¿½ï¿½ï¿½ï¿½ï¶¨ï¿½ï¿½__FILE ï¿½ï¿½ ï¿½ï¿½Ê¹ï¿½Ã°ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½ */
 #pragma import(__use_no_semihosting)
-
+    void _sys_exit(int x) { x = x; }
+    void _ttywrch(int ch) { ch = ch; }
 struct __FILE
 {
     int handle;
 };
+FILE __stdout;
+FILE __stdin;
+FILE __stderr;
 
 #endif
-
-/* ï¿½ï¿½Ê¹ï¿½Ã°ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½Ø¶ï¿½ï¿½ï¿½_ttywrch\_sys_exit\_sys_command_stringï¿½ï¿½ï¿½ï¿½,ï¿½ï¿½Í¬Ê±ï¿½ï¿½ï¿½ï¿½AC6ï¿½ï¿½AC5Ä£Ê½ */
-int _ttywrch(int ch)
-{
-    ch = ch;
-    return ch;
-}
-
-/* ï¿½ï¿½ï¿½ï¿½_sys_exit()ï¿½Ô±ï¿½ï¿½ï¿½Ê¹ï¿½Ã°ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½ */
-void _sys_exit(int x)
-{
-    x = x;
-}
-
-char *_sys_command_string(char *cmd, int len)
-{
-    return NULL;
-}
-
-/* FILE ï¿½ï¿½ stdio.hï¿½ï¿½ï¿½æ¶¨ï¿½ï¿½. */
-FILE __stdout;
 
 /* ï¿½Ø¶ï¿½ï¿½ï¿½fputcï¿½ï¿½ï¿½ï¿½, printfï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ»ï¿½Í¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½fputcï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 int fputc(int ch, FILE *f)
@@ -74,16 +57,15 @@ int fputc(int ch, FILE *f)
 
 
 #if 1     
+   
 
 uint8_t g_usart_rx_buf[USART_REC_LEN];
-
 uint16_t g_usart_rx_sta = 0;
-
 uint8_t g_rx_buffer[RXBUFFERSIZE];    
-
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USART1 init function */
 
@@ -125,9 +107,8 @@ void MX_USART1_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
-    #if USART_EN_RX
-    /* ï¿½Ãºï¿½ï¿½ï¿½ï¿½á¿ªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶Ï£ï¿½ï¿½ï¿½Ö¾Î»UART_IT_RXNEï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½ï¿½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
-    HAL_UART_Receive_IT(&huart1, (uint8_t *)g_rx_buffer, RXBUFFERSIZE);
+    #if USART_EN_RX  
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart1, g_usart_rx_buf, USART_REC_LEN);
     #endif
   /* USER CODE END USART1_Init 2 */
 
@@ -175,8 +156,27 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
     HAL_GPIO_Init(USART1_U_GPIO_Port, &GPIO_InitStruct);
 
+    /* USART1 DMA Init */
+    /* USART1_RX Init */
+    hdma_usart1_rx.Instance = DMA1_Stream0;
+    hdma_usart1_rx.Init.Request = DMA_REQUEST_USART1_RX;
+    hdma_usart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_usart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart1_rx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart1_rx);
+
     /* USART1 interrupt Init */
-    HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(USART1_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
   /* USER CODE BEGIN USART1_MspInit 1 */
 
@@ -201,6 +201,9 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     */
     HAL_GPIO_DeInit(GPIOA, USART1_R_Pin|USART1_U_Pin);
 
+    /* USART1 DMA DeInit */
+    HAL_DMA_DeInit(uartHandle->hdmarx);
+
     /* USART1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART1_IRQn);
   /* USER CODE BEGIN USART1_MspDeInit 1 */
@@ -210,22 +213,28 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
-
-
-/**
- * @brief       Rxï¿½ï¿½ï¿½ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½
- * @param       huart: UARTï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
- * @retval      ï¿½ï¿½
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+#include <string.h>
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    if(huart->Instance == USART1)                             /* ï¿½ï¿½ï¿½ï¿½Ç´ï¿½ï¿½ï¿½1 */
+    if (huart->Instance == USART1)
     {
-        if((g_usart_rx_sta & 0x8000) == 0)                    /* ï¿½ï¿½ï¿½ï¿½Î´ï¿½ï¿½ï¿½ */
-        {             
-        }       
+        /* 1. ¡¾ºËÐÄÐÞÕý¡¿ÔÚ¶ÁÈ¡Êý¾ÝÇ°£¬±ØÐë×÷·Ï¸Ã¶ÎÄÚ´æµÄ Cache */
+        /* ÕâÑùÈ·±£ CPU ½ÓÏÂÀ´¶Áµ½µÄ g_usart_rx_buf ÊÇ´Ó RAM ÀïÄÃµ½µÄ×îÐÂ DMA Êý¾Ý */
+        SCB_InvalidateDCache_by_Addr((uint32_t*)g_usart_rx_buf, USART_REC_LEN);
+
+        /* 2. °²È«´¦Àí£ºÊÖ¶¯Ìí¼Ó×Ö·û´®½áÊø·û */
+        if(Size < USART_REC_LEN) {
+            g_usart_rx_buf[Size] = '\0'; 
+        } else {
+            g_usart_rx_buf[USART_REC_LEN - 1] = '\0';
+        }
+        
+        SCPI_Input(&scpi_context, (char*)g_usart_rx_buf, Size);
+        
+        /* 5. ÖØÐÂ¿ªÆô½ÓÊÕ */
+        /* ÒòÎªÄãÊ¹ÓÃµÄÊÇ DMA_NORMAL Ä£Ê½£¬±ØÐëÊÖ¶¯ÖØÆô */
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart1, g_usart_rx_buf, USART_REC_LEN);
     }
-    HAL_UART_Receive_IT(&huart1, (uint8_t *)g_rx_buffer, RXBUFFERSIZE);
 }
 #endif
 /* USER CODE END 1 */

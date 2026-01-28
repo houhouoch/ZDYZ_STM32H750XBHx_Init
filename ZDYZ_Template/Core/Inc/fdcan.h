@@ -1,9 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    usart.h
+  * @file    fdcan.h
   * @brief   This file contains all the function prototypes for
-  *          the usart.c file
+  *          the fdcan.c file
   ******************************************************************************
   * @attention
   *
@@ -18,8 +18,8 @@
   */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __USART_H__
-#define __USART_H__
+#ifndef __FDCAN_H__
+#define __FDCAN_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,24 +29,16 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-
+void CAN_Test_Send(void);
 /* USER CODE END Includes */
 
-extern UART_HandleTypeDef huart1;
+extern FDCAN_HandleTypeDef hfdcan1;
 
 /* USER CODE BEGIN Private defines */
 
-
-#define USART_REC_LEN   256//32对齐                     
-#define USART_EN_RX     1 
-#define RXBUFFERSIZE    1   
-extern uint8_t  g_usart_rx_buf[USART_REC_LEN];  /* ���ջ���,���USART_REC_LEN���ֽ�.ĩ�ֽ�Ϊ���з� */
-extern uint16_t g_usart_rx_sta;                 /* ����״̬��� */
-extern uint8_t g_rx_buffer[RXBUFFERSIZE];       /* HAL��USART����Buffer */
-
 /* USER CODE END Private defines */
 
-void MX_USART1_UART_Init(void);
+void MX_FDCAN1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
@@ -56,5 +48,5 @@ void MX_USART1_UART_Init(void);
 }
 #endif
 
-#endif /* __USART_H__ */
+#endif /* __FDCAN_H__ */
 

@@ -36,7 +36,10 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+#include "./BSP/LED/led.h"
+#include "./BSP/KEY/key.h"
+#include "./BSP/MPU/mpu.h"
+#include "scpi-def.h"
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
