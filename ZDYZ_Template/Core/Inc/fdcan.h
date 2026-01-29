@@ -35,7 +35,7 @@ void CAN_Test_Send(void);
 extern FDCAN_HandleTypeDef hfdcan1;
 
 /* USER CODE BEGIN Private defines */
-
+uint8_t DevBoard_Send_FDCAN_Msg(uint32_t id, uint8_t *data, uint32_t len);
 /* USER CODE END Private defines */
 
 void MX_FDCAN1_Init(void);

@@ -40,6 +40,7 @@ extern "C" {
 #include "./BSP/KEY/key.h"
 #include "./BSP/MPU/mpu.h"
 #include "scpi-def.h"
+#include "./BSP/CAN/can.h"
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

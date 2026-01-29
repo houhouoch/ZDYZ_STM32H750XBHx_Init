@@ -43,14 +43,14 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.AutoRetransmission = ENABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 1;
+  hfdcan1.Init.NominalPrescaler = 5;
   hfdcan1.Init.NominalSyncJumpWidth = 1;
-  hfdcan1.Init.NominalTimeSeg1 = 31;
-  hfdcan1.Init.NominalTimeSeg2 = 18;
-  hfdcan1.Init.DataPrescaler = 1;
+  hfdcan1.Init.NominalTimeSeg1 = 15;
+  hfdcan1.Init.NominalTimeSeg2 = 4;
+  hfdcan1.Init.DataPrescaler = 5;
   hfdcan1.Init.DataSyncJumpWidth = 16;
-  hfdcan1.Init.DataTimeSeg1 = 31;
-  hfdcan1.Init.DataTimeSeg2 = 3;
+  hfdcan1.Init.DataTimeSeg1 = 15;
+  hfdcan1.Init.DataTimeSeg2 = 4;
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 62;
   hfdcan1.Init.ExtFiltersNbr = 16;
@@ -154,6 +154,68 @@ void HAL_FDCAN_MspDeInit(FDCAN_HandleTypeDef* fdcanHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+#include "fdcan.h" // 确保包含了 FDCAN 的头文件
+
+/**
+ * @brief 替代 CAN_Send_Msg 的底层发送函数
+ * @param id 扩展帧 ID
+ * @param data 数据指针 (8字节)
+ * @param len 数据长度 (通常为 8)
+ */
+uint8_t DevBoard_Send_FDCAN_Msg(uint32_t id, uint8_t *data, uint32_t len)
+{
+    FDCAN_TxHeaderTypeDef TxHeader;
+
+    // 1. 配置报文头
+    TxHeader.Identifier = id;                         // 设置 ID
+    TxHeader.IdType = FDCAN_EXTENDED_ID;               // 必须是扩展帧
+    TxHeader.TxFrameType = FDCAN_DATA_FRAME;           // 数据帧
+    TxHeader.DataLength = FDCAN_DLC_BYTES_8;           // 长度 8 字节
+    TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    TxHeader.BitRateSwitch = FDCAN_BRS_OFF;            // 关闭速率切换
+    TxHeader.FDFormat = FDCAN_CLASSIC_CAN;             // 使用经典 CAN 格式 (配合主机)
+    TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    TxHeader.MessageMarker = 0;
+
+    // 2. 发送报文到 FIFO
+    if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, data) != HAL_OK)
+    {
+        return 1; // 发送失败
+    }
+    return 0; // 发送成功
+}
+
+/* 在你的 fdcan.c 或接收处理文件中编写 */
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+    FDCAN_RxHeaderTypeDef RxHeader;
+    uint8_t RxData[8];
+
+    if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
+    {
+        HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData);
+
+//        /* 拦截电压回读 ID (假设为 0xA1100) */
+//        if (RxHeader.Identifier == 0xA2100)
+//        {
+//            union {
+//                float f;
+//                uint8_t p[4];
+//            } converter;
+
+//            /* 注意：主机使用大端序发送，这里需反向解析 */
+//            converter.p[3] = RxData[0]; 
+//            converter.p[2] = RxData[1];
+//            converter.p[1] = RxData[2];
+//            converter.p[0] = RxData[3];
+
+//            /* 在串口打印出来，看看是不是主机的实时电压 */
+//            printf("Host Real-time Voltage: %.4f V\r\n", converter.f);
+//        }
+    }
+}
+
 void CAN_Test_Send(void)
 {
     FDCAN_TxHeaderTypeDef TxHeader;

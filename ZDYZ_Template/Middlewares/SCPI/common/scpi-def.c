@@ -40,7 +40,73 @@
 #include <string.h>
 #include "scpi/scpi.h"
 #include "scpi-def.h"
+//**********************************START ****************************
+/* 修改后的电压设置回调函数 */
+scpi_result_t Cmd_Set_Voltage(scpi_t *context) {
+    scpi_number_t param1 = {0};
 
+    /* 1. 从串口解析数字参数 */
+    if (!SCPI_ParamNumber(context, scpi_special_numbers_def, &param1, FALSE)) {
+        return SCPI_RES_ERR;
+    }
+
+    /* 2. 处理特殊值 (MIN/MAX)，如果没有特殊需求可跳过 */
+    if (param1.special != FALSE) {
+        if (param1.content.tag == SCPI_NUM_MIN) param1.content.value = 0;
+        else if (param1.content.tag == SCPI_NUM_MAX) param1.content.value = 60; // 假设最大60V
+    }
+
+    /* 3. 【核心动作】将解析到的 float 值通过 CAN 发送给主机 */
+    DevBoard_Set_Host_Voltage((float)param1.content.value);
+
+    /* 4. 可选：在串口回显一下，方便调试 */
+    printf("SCPI Executed: Set Host Voltage to %.3fV\r\n", param1.content.value);
+
+    return SCPI_RES_OK;
+}
+/* 电流设置回调 */
+scpi_result_t SCPI_Cmd_Current(scpi_t * context) {
+    scpi_number_t param1;
+
+    /* 1. 从串口解析电流值 */
+    if (!SCPI_ParamNumber(context, scpi_special_numbers_def, &param1, TRUE)) {
+        return SCPI_RES_ERR;
+    }
+
+    /* 2. 更新从机设置 */
+    float currentVal = (float)param1.content.value;
+    
+    // 调用你之前写好的 CAN 发送函数 (假设 ID 为 0x11002)
+    DevBoard_Set_Host_Current(currentVal); 
+
+
+    printf("SCPI Executed: Set Current to %.3f A\r\n", currentVal);
+    return SCPI_RES_OK;
+}
+
+
+/**
+ * @brief SCPI 回调函数：处理 OUTP ON/OFF 指令
+ */
+scpi_result_t Cmd_Set_Output(scpi_t * context) {
+    scpi_bool_t param1;
+
+    /* 1. 解析布尔参数 (ON/OFF 或 1/0) */
+    if (!SCPI_ParamBool(context, &param1, TRUE)) {
+        return SCPI_RES_ERR;
+    }
+
+    /* 2. 调用 CAN 发送函数 */
+    DevBoard_Set_Host_Output(param1 ? 1 : 0);
+
+    /* 3. 调试打印 */
+    printf("SCPI Executed: Output %s\r\n", param1 ? "ON" : "OFF");
+
+    return SCPI_RES_OK;
+}
+
+
+//**********************************END****************************
 static scpi_result_t DMM_MeasureVoltageDcQ(scpi_t * context) {
     scpi_number_t param1, param2;
     char bf[15];
@@ -374,6 +440,14 @@ const scpi_command_t scpi_commands[] = {
     {.pattern = "SYSTem:ERRor:COUNt?", .callback = SCPI_SystemErrorCountQ,},
     {.pattern = "SYSTem:VERSion?", .callback = SCPI_SystemVersionQ,},
 
+    
+    
+    //VOLT
+        {.pattern = "[:ADDR#][:SOURce]:VOLTage[:LEVel][:IMMediate][:AMPLitude]",     .callback = Cmd_Set_Voltage},
+    //电流
+    {.pattern = "CURRent[:LEVel][:IMMediate][:AMPLitude]", .callback = SCPI_Cmd_Current},
+    //output
+    {.pattern = "OUTPut[:STATe]", .callback = Cmd_Set_Output},
     /* {.pattern = "STATus:OPERation?", .callback = scpi_stub_callback,}, */
     /* {.pattern = "STATus:OPERation:EVENt?", .callback = scpi_stub_callback,}, */
     /* {.pattern = "STATus:OPERation:CONDition?", .callback = scpi_stub_callback,}, */

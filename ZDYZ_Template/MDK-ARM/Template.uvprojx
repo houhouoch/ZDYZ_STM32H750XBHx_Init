@@ -1099,6 +1099,11 @@
               <FileType>1</FileType>
               <FilePath>..\Drivers\BSP\MPU\mpu.c</FilePath>
             </File>
+            <File>
+              <FileName>can.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\BSP\CAN\can.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
