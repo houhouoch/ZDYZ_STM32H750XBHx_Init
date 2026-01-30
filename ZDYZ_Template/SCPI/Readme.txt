@@ -1,17 +1,27 @@
-/**********************************   Readme    **********************************/
-SCPI库@Jan Breuer@https://github.com/j123b567/scpi-parser.git
-https://www.yono233.cn/posts/novel/24_7_12_SCPI 这个是SCPI的一个小小的介绍和入门
-/**********************************   移植    **********************************/
-移植的过程也相对简单。
-1、把libscpi这个文件夹整个拖入到工程，然后在MDK中把src的.C文件进行加入  再把相应的头文件进行加载就完事了！
-2、这时候会报错，是因为下面这个结构体中没定义相关的函数，这边建议写一个.C文件 把SCPI_Write写上即可
+# SCPI Parser 移植与使用指南
+
+本项目基于 [Jan Breuer / scpi-parser](https://github.com/j123b567/scpi-parser.git) 库进行移植，旨在为嵌入式设备提供标准化的 SCPI 指令解析功能。
+
+> **参考入门资料：** [SCPI 的一个小小介绍和入门](https://www.yono233.cn/posts/novel/24_7_12_SCPI)
+
+---
+
+## /********************************** 移植   **********************************/
+
+移植的过程相对简单：
+
+1. **导入文件**：把 `libscpi` 这个文件夹整个拖入到工程，然后在 MDK 中把 `src` 的 `.c` 文件进行加入，再把相应的头文件路径进行加载就完事了！
+2. **定义接口**：这时候会报错，是因为下面这个结构体中没定义相关的函数，这边建议写一个 `.c` 文件把 `SCPI_Write` 写上即可。
+   
+```c
 scpi_interface_t scpi_interface = {
     .error = SCPI_Error,
     .write = SCPI_Write,
-    .control = NULL,//SCPI_Control,
-    .flush = NULL,//SCPI_Flush,
-    .reset = NULL,//SCPI_Reset,
+    .control = NULL, //SCPI_Control,
+    .flush = NULL,   //SCPI_Flush,
+    .reset = NULL,   //SCPI_Reset,
 };
+
 3  、完成上述步骤后还会报错
  //{.pattern = "SYSTem:COMMunication:TCPIP:CONTROL?", .callback = SCPI_SystemCommTcpipControlQ,},
 把这个取消掉即可

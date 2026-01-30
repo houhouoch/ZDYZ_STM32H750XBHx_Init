@@ -111,7 +111,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART1_UART_Init();
-  //MX_QUADSPI_Init();
+  MX_QUADSPI_Init();
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
    led_init();
@@ -120,7 +120,7 @@ int main(void)
    printf("test start  -->CAN\r\n");
    //printf SCPI-message
    SCPI_Config_Init();
-   
+
     FDCAN_FilterTypeDef sFilterConfig;
     sFilterConfig.IdType = FDCAN_STANDARD_ID;      /* ������׼֡ */
     sFilterConfig.FilterIndex = 0;                 /* ʹ�� 0 �Ź����� */

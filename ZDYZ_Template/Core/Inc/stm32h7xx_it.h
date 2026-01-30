@@ -61,7 +61,6 @@ void FDCAN1_IT1_IRQHandler(void);
 void USART1_IRQHandler(void);
 void TIM6_DAC_IRQHandler(void);
 void FDCAN_CAL_IRQHandler(void);
-void DMAMUX1_OVR_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

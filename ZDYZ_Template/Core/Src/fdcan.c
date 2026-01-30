@@ -43,14 +43,14 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.AutoRetransmission = ENABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 5;
+  hfdcan1.Init.NominalPrescaler = 1;
   hfdcan1.Init.NominalSyncJumpWidth = 1;
-  hfdcan1.Init.NominalTimeSeg1 = 15;
-  hfdcan1.Init.NominalTimeSeg2 = 4;
-  hfdcan1.Init.DataPrescaler = 5;
+  hfdcan1.Init.NominalTimeSeg1 = 31;
+  hfdcan1.Init.NominalTimeSeg2 = 18;
+  hfdcan1.Init.DataPrescaler = 1;
   hfdcan1.Init.DataSyncJumpWidth = 16;
-  hfdcan1.Init.DataTimeSeg1 = 15;
-  hfdcan1.Init.DataTimeSeg2 = 4;
+  hfdcan1.Init.DataTimeSeg1 = 31;
+  hfdcan1.Init.DataTimeSeg2 = 3;
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 62;
   hfdcan1.Init.ExtFiltersNbr = 16;
@@ -196,23 +196,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     {
         HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData);
 
-//        /* 拦截电压回读 ID (假设为 0xA1100) */
-//        if (RxHeader.Identifier == 0xA2100)
-//        {
-//            union {
-//                float f;
-//                uint8_t p[4];
-//            } converter;
 
-//            /* 注意：主机使用大端序发送，这里需反向解析 */
-//            converter.p[3] = RxData[0]; 
-//            converter.p[2] = RxData[1];
-//            converter.p[1] = RxData[2];
-//            converter.p[0] = RxData[3];
-
-//            /* 在串口打印出来，看看是不是主机的实时电压 */
-//            printf("Host Real-time Voltage: %.4f V\r\n", converter.f);
-//        }
     }
 }
 

@@ -218,11 +218,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART1)
     {
-        /* 1. ¡¾ºËÐÄÐÞÕý¡¿ÔÚ¶ÁÈ¡Êý¾ÝÇ°£¬±ØÐë×÷·Ï¸Ã¶ÎÄÚ´æµÄ Cache */
-        /* ÕâÑùÈ·±£ CPU ½ÓÏÂÀ´¶Áµ½µÄ g_usart_rx_buf ÊÇ´Ó RAM ÀïÄÃµ½µÄ×îÐÂ DMA Êý¾Ý */
+        /* 1. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¶ï¿½È¡ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¸Ã¶ï¿½ï¿½Ú´ï¿½ï¿½ Cache */
+        /* ï¿½ï¿½ï¿½ï¿½È·ï¿½ï¿½ CPU ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ g_usart_rx_buf ï¿½Ç´ï¿½ RAM ï¿½ï¿½ï¿½Ãµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DMA ï¿½ï¿½ï¿½ï¿½ */
         SCB_InvalidateDCache_by_Addr((uint32_t*)g_usart_rx_buf, USART_REC_LEN);
 
-        /* 2. °²È«´¦Àí£ºÊÖ¶¯Ìí¼Ó×Ö·û´®½áÊø·û */
+        /* 2. ï¿½ï¿½È«ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
         if(Size < USART_REC_LEN) {
             g_usart_rx_buf[Size] = '\0'; 
         } else {
@@ -231,8 +231,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         
         SCPI_Input(&scpi_context, (char*)g_usart_rx_buf, Size);
         
-        /* 5. ÖØÐÂ¿ªÆô½ÓÊÕ */
-        /* ÒòÎªÄãÊ¹ÓÃµÄÊÇ DMA_NORMAL Ä£Ê½£¬±ØÐëÊÖ¶¯ÖØÆô */
+        /* 5. ï¿½ï¿½ï¿½Â¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
+        /* ï¿½ï¿½Îªï¿½ï¿½Ê¹ï¿½Ãµï¿½ï¿½ï¿½ DMA_NORMAL Ä£Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ */
         HAL_UARTEx_ReceiveToIdle_DMA(&huart1, g_usart_rx_buf, USART_REC_LEN);
     }
 }
