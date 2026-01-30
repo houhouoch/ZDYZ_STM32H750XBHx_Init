@@ -22,7 +22,7 @@ scpi_interface_t scpi_interface = {
     .reset = NULL,   //SCPI_Reset,
 };
 
-3  、完成上述步骤后还会报错
+3.完成上述步骤后还会报错
  //{.pattern = "SYSTem:COMMunication:TCPIP:CONTROL?", .callback = SCPI_SystemCommTcpipControlQ,},
 把这个取消掉即可
 /**********************************   解决    **********************************/
