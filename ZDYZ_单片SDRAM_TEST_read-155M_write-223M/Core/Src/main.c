@@ -287,13 +287,12 @@ int main(void)
             sdram_test();
         }
         if (key == KEY1_PRES)
-        {
-            /* 测试SDRAM容量 */
+        {           
             SDRAM_WriteSpeed_Optimized();
         }
         if (key == KEY2_PRES)
         {
-            /* 测试SDRAM容量 */
+           
             sdram_speed_test();
         }
         
