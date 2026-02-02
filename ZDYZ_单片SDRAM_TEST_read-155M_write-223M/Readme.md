@@ -1,70 +1,115 @@
-# STM32H7 FMC 驱动 W9825G6KH-6 SDRAM 移植实战指南
+# 🚀 STM32H7 FMC 驱动 W9825G6KH-6 SDRAM 移植实战与深度解析
 
-本项目记录了在 STM32H7 系列单片机（HCLK 480MHz, FMC 时钟源为 D1HCLK 240MHz）上移植 Winbond **W9825G6KH-6** SDRAM 的全过程。文档汇总了时序配置、硬件细节、软件坑位以及性能优化建议。
+本仓库记录了在 **STM32H7** 系列高性能 MCU 上，利用 FMC 外设驱动 Winbond **W9825G6KH-6** SDRAM（32MB）的全过程。这份文档整合了参数配平经验、时序压榨逻辑以及底层硬件原理，旨在为后续开发者提供一份准确且硬核的参考手册。
 
-## 1. 硬件规格概览 (W9825G6KH-6)
-* [cite_start]**物理容量**：256Mbit (32MB) [cite: 3, 18]。
-* [cite_start]**组织结构**：4M words × 4 banks × 16 bits [cite: 3, 18, 33]。
-* [cite_start]**最高频率**：166MHz (CAS Latency = 3 模式下) [cite: 21, 45]。
-* [cite_start]**刷新要求**：8K次刷新周期 / 64ms [cite: 41, 438]。
-* [cite_start]**主要引脚**：A0-A12 (行地址), A0-A8 (列地址), BA0-BA1 (Bank选择), DQ0-DQ15 (数据线) [cite: 167]。
+---
 
-## 2. 核心时序配置 (120MHz 环境)
-当 HCLK3 为 240MHz 且 FMC 分频设为 2 时，SDRAM 的工作频率为 **120MHz** ($t_{CK} \approx 8.33ns$)。
+## 📑 1. 硬件规格与核心参数
 
-### CubeMX 定时参数建议值
-为了满足 W9825G6KH-6 的 AC 特性并规避 CubeMX 的逻辑校验限制，建议配置如下：
+* **芯片型号**：Winbond W9825G6KH-6
+* **物理容量**：256Mbit (32MB)
+* **组织结构**：4M words × 4 banks × 16 bits
+* **速度等级**：-6 档位，在 $CAS\ Latency = 3$ 时最高支持 $166\text{MHz}$
+* **刷新要求**：8K 次刷新周期 / $64\text{ms}$
 
-| CubeMX 配置项 | 建议值 (Cycles) | 理由 (基于 -6 速度档) |
-| :--- | :--- | :--- |
-| **Load To Active Delay** | 2 | [cite_start]$t_{RSC}$ 至少需 2 周期 [cite: 438]。 |
-| **Exit Self Refresh Delay** | 9 | [cite_start]$t_{XSR}$ 最小 72ns，换算约为 8.64 周期 [cite: 438]。 |
-| **Self Refresh Time** | 6 | [cite_start]$t_{RAS}$ 最小 42ns，换算约为 5.04 周期 [cite: 438]。 |
-| **Row Cycle Delay** | 9 | [cite_start]$t_{RC}$ 最小 60ns [cite: 438]，且需满足 $\ge t_{RAS} + t_{RP}$。 |
-| **Write Recovery Time** | 2 | [cite_start]手册最小值 [cite: 438]。注：若 CubeMX 报错，需优先满足 $t_{WR} \ge t_{RAS} - t_{RCD}$ 约束。 |
-| **RP Delay** | 2 | [cite_start]$t_{RP}$ 最小 15ns [cite: 438]。 |
-| **RCD Delay** | 3 | [cite_start]$t_{RCD}$ 针对 -6 等级为 18ns，需 3 周期 [cite: 438]。 |
+---
 
-## 3. 关键移植细节 (避坑总结)
+## 🧠 2. 核心知识点：深入理解 SDRAM
 
-### ① GPIO 强制上拉
-* **操作**：在 CubeMX 的引脚配置中，务必将所有 FMC 相关的引脚（地址、数据、控制线）配置为 **上拉 (Pull-up)**。
-* **原因**：高速同步器件对信号稳定性要求极高，上拉可防止信号在切换瞬间浮空导致的逻辑误判。
+### 🔍 逻辑结构：Bank、行 (Row) 与列 (Column)
+SDRAM 内部并非一个连续的大数组，而是一个多层级的表格结构：
+* **L-Bank**：逻辑 Bank。该芯片拥有 4 个独立的 Bank。切换 Bank 需要时间，但交替访问不同 Bank 可以隐藏预充电时间，从而显著提高数据带宽。
+* **行 (Row) 与列 (Column)**：通过行地址（A0-A12）定位到某一行，再通过列地址（A0-A8）定位到具体的存储单元。
+* **✨ 移植心得**：由于地址线是复用的，FMC 中的 `ColumnBitsNumber` 和 `RowBitsNumber` 必须与手册严格对应（本例为 **9 位列地址** 和 **13 位行地址**），否则会导致寻址空间错位。
 
-### ② 全局句柄统一 (`hsdram1`)
-* **操作**：在编写 `sdram_initialization_sequence` 初始化序列时，确保将所有对 `HAL_SDRAM_SendCommand` 的调用句柄统一为 CubeMX 自动生成的全局句柄 **`hsdram1`**。
-* **原因**：避免因句柄不统一（如混用 `g_sdram_handle`）导致的硬件状态不同步或寄存器访问冲突。
+### ⏱️ 关键时序参数的物理意义
+* **$t_{RCD}$ (RAS to CAS Delay)**：行激活到列读写命令之间的延迟。对应代码中的 `SdramTiming.RCDDelay`。
+* **$t_{RP}$ (Row Precharge Delay)**：行预充电时间。对应代码中的 `SdramTiming.RPDelay`。
+* **CAS Latency (CL)**：列地址选通脉冲潜伏期。即从发出读命令到数据线上出现第一个有效数据所需的“等待周期”。
 
-### ③ CAS Latency (CL) 必须匹配
-* **配置**：FMC 控制器的 `CASLatency` 必须与发送给芯片模式寄存器的指令完全一致。
-* [cite_start]**操作**：若控制器设为 CL3，则初始化序列中 `ModeRegisterDefinition` 的位 4-6 必须设为 `011` [cite: 684, 710]。
-* **风险**：时序错位会导致数据读写异常或总线挂起（卡死）。
+---
 
-### ④ 存储容量校正
-* [cite_start]**规格**：单片 W9825G6KH-6 容量为 32MB [cite: 18]。
-* **代码修改**：测试函数（如 `sdram_test`）的地址循环上限必须设为 `32*1024*1024`，防止地址回环覆盖低端内存或触发非法访问。
+## 🛠️ 3. 移植避坑指南与细节汇总
 
-### ⑤ 必须开启 D-Cache
-* **操作**：在 CPU 初始化后调用 `SCB_EnableDCache()`。
-* **结论**：STM32H7 访问外部 SDRAM 若不开启数据缓存，读写速度将慢 10 倍以上。开启后方可发挥 120MHz FMC 的真实带宽。
+### ⚡ ① 信号完整性：引脚必须上拉
+* **操作**：在 CubeMX 配置中，FMC 所有的地址、数据及控制线必须全部配置为 **上拉 (Pull-up)**。
+* **原理**：$120\text{MHz}$ 下引脚寄生电容会导致电平跳变迟缓。开启上拉能加快信号上升速度，抑制高频噪声。
 
-## 4. 读写速度测试建议
-建议采用 32 位指针访问并配合循环展开，以压榨最大带宽。
+### 🔗 ② 全局句柄统一性 (`hsdram1`)
+* **教训**：移植正点原子等第三方代码时，务必将代码中的 `g_sdram_handle` 全局替换为 CubeMX 生成的 **`hsdram1`**，否则底层寄存器无法被正确驱动。
+
+### 📏 ③ 存储容量的单片匹配 (32MB)
+* **配置修改**：本例使用的是 **单片** 16-bit SDRAM (32MB)。
+* **坑点警示**：正点原子（Alientek）等主流案例通常基于 **双片叠加** 设计（64MB）。若直接沿用其 $64\text{MB}$ 的测试逻辑，在 32MB 的硬件上会触发 **地址回环 (Wrap-around)** —— 即当寻址超过 32MB 时，高位地址线失效，数据会重新从 `0x00` 地址开始覆盖。
+* **容量校验代码**：通过以下函数，可以实测出硬件的真实容量。如果发生回环，循环将自动跳出并打印出实际物理边界。
 
 ```c
-/**
- * @brief SDRAM 读取速度测试示例 (32MB)
- */
-void ReadSpeedTest(void) {
-    uint32_t cnt;
-    volatile uint32_t *pBuf = (uint32_t *)SDRAM_BANK_ADDR;
-    volatile uint32_t temp;
-    
-    Get_System_Time(1);
-    for (uint32_t i = 0; i < (1024 * 1024 * 32 / 4); i += 8) {
-        temp = *pBuf++; temp = *pBuf++; temp = *pBuf++; temp = *pBuf++;
-        temp = *pBuf++; temp = *pBuf++; temp = *pBuf++; temp = *pBuf++;
+/* SDRAM 容量自动扫描与校验测试 */
+void sdram_test(void)
+{
+    uint32_t i;
+    uint32_t temp = 0;
+    uint32_t sval = 0;      
+
+    /* 第一阶段：每间隔 16KB 写入一个增量索引值 */
+    for (i = 0; i < (32 * 1024 * 1024); i += (16 * 1024))
+    {
+        *(volatile uint32_t *)(SDRAM_BANK_ADDR + i) = temp++;
     }
-    cnt = Get_System_Time(2);
-    printf("Read Rate: %d MB/s\r\n", 32 * 1000000 / cnt);
+    
+    /* 第二阶段：读取并校验数据，检测地址回环 */
+    for (i = 0; i < (32 * 1024 * 1024); i += (16 * 1024))
+    {
+        temp = *(volatile uint32_t *)(SDRAM_BANK_ADDR + i);
+        
+        /* 若读出的值不再递增或变小，说明发生了地址回环覆盖 */
+        if ((temp != 0) && (temp <= sval))
+        {
+            printf("Detection Error: Address Wrap-around at %d KB!\r\n", i/1024);
+            break;
+        }
+        else
+        {
+            sval = temp;
+        }               
+        /* 实时打印当前检测到的有效容量 */
+        printf("SDRAM Valid Capacity: %d KB\r\n", (temp + 1) * 16);
+    }
 }
+```
+
+### 🚀 ④ 开启 D-Cache 的决定性影响
+* **结论**：STM32H7 访问外部内存若不开启 **D-Cache**，性能将下降 10 倍以上！开启后需注意处理 DMA 传输时的 Cache 一致性。
+
+---
+
+## 💻 4. 核心 FMC 配置参考 (`FMC.c`)
+
+以下为针对 W9825G6KH-6 的核心参数配置：
+
+```c
+/* 核心时序参数 (120MHz 环境) */
+SdramTiming.LoadToActiveDelay    = 2; 
+SdramTiming.ExitSelfRefreshDelay = 9; 
+SdramTiming.SelfRefreshTime      = 6; 
+SdramTiming.RowCycleDelay        = 8; // tRC >= tRAS + tRP
+SdramTiming.WriteRecoveryTime    = 2; // 重要：需在 FMC.c 中手动从 5 改回 2
+SdramTiming.RPDelay              = 2; 
+SdramTiming.RCDDelay             = 3; // 120MHz 下设为 3 更稳健
+```
+
+> [!CAUTION]
+> **性能压榨技巧**：在 CubeMX 界面中，`WriteRecoveryTime` 往往被限制不能小于 5。为了达到极致性能，建议在生成代码后手动将其改为 **2**。
+
+---
+
+## 📊 5. 性能实测结果
+测试环境：HCLK 480MHz, FMC 120MHz, 开启 D-Cache。
+
+| 操作类型 | 实测表现 |
+| :--- | :--- |
+| **写入速度 (Write Speed)** | **222.22 MB/s** |
+| **读取速度 (Read Speed)** | **153.85 MB/s** |
+
+---
+/********************************** END **********************************/
