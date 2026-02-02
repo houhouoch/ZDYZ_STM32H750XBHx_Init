@@ -167,59 +167,7 @@ uint32_t Get_System_Time(uint8_t State)
 	}
   return 0;
 }
-void WriteSpeedTest(void)
-{
-	uint32_t start, end, cnt;
-	uint32_t i;
-	uint16_t *pBuf,j;
 
-	j = 0;
-	pBuf = (uint16_t *)SDRAM_BANK_ADDR;
-	Get_System_Time(1);
-	
-
-	for (i=1024*1024; i>0; i--)//因为1MB=1024KB=1024*1024B=1024*1024*8bit(位)
-	{
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;	
-                     
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-		*pBuf++ = 0xFFFF;
-     
-    //(16*16*1024*1024)=32*8*1024*1024(bit)(位)	
-    //1MB=1024*1024*8(bit)		
-
-	}
-
-	cnt=(Get_System_Time(2));
-	
-	j = 0;
-	pBuf = (uint16_t *)SDRAM_BANK_ADDR;
-	
-	//下面是对1MB的内容进行检验
-	for (i = 0; i < 1024*1024*8; i++)//因为1MB=1024KB=1024*1024B=1024*1024*8bit(位)
-	{
-		if(*pBuf++ != j++)
-		{
-			printf("Write error j=%d\r\n", j);
-			break;
-		}
-	}
-		
-	printf("32MB Data write into SDRAM spend: %dus,    Rate: %dMB/s  \r\n", cnt, 32*1000000 / cnt);
-}
 
 void SDRAM_WriteSpeed_Optimized(void)
 {
@@ -246,45 +194,9 @@ void SDRAM_WriteSpeed_Optimized(void)
     elapsed = Get_System_Time(2);
     printf("Write Rate: %d MB/s\r\n", 32 * 1000000 / elapsed);
 }
-void ReadSpeedTest(void)
-{	
-	uint32_t cnt;
-	uint32_t i;
 
-	uint16_t *pBuf;
-	__IO  uint16_t ulTemp; 
-  pBuf = (uint16_t *)SDRAM_BANK_ADDR;
-	
-	Get_System_Time(1);
 
-	for (i=1024*1024; i>0; i--)
-	{
-		
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		ulTemp = *pBuf++;
-		
-	}
-	
-	
-  cnt=(Get_System_Time(2));
 
-	printf("32MB Data read from SDRAM spend: %dus,    Rate: %dMB/s  \r\n", cnt, 32*1000000 /cnt);
-}
 
 /* USER CODE END 0 */
 
@@ -382,7 +294,7 @@ int main(void)
         if (key == KEY2_PRES)
         {
             /* 测试SDRAM容量 */
-            WriteSpeedTest();
+            sdram_speed_test();
         }
         
         LED0(1);

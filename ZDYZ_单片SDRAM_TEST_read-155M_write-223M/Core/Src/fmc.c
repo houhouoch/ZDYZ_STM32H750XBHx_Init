@@ -82,7 +82,7 @@ static void sdram_initialization_sequence(void)
     HAL_SDRAM_SendCommand(&hsdram1, &fmc_sdram_command_struct, 0xFFFF);
     
     /* ����ˢ�¼����� */
-    HAL_SDRAM_ProgramRefreshRate(&hsdram1, 839);
+    HAL_SDRAM_ProgramRefreshRate(&hsdram1, 918);
 }
 /* USER CODE END 0 */
 
@@ -115,14 +115,14 @@ void MX_FMC_Init(void)
   hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
   hsdram1.Init.ReadBurst = FMC_SDRAM_RBURST_ENABLE;
   hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_0;
-  /* SdramTiming */
-  SdramTiming.LoadToActiveDelay = 2;
-  SdramTiming.ExitSelfRefreshDelay = 8;
-  SdramTiming.SelfRefreshTime = 7;
-  SdramTiming.RowCycleDelay = 7;
-  SdramTiming.WriteRecoveryTime = 2;
-  SdramTiming.RPDelay = 2;
-  SdramTiming.RCDDelay = 2;
+    /* SdramTiming */
+    SdramTiming.LoadToActiveDelay    = 2; // tRSC: 2ck (OK)
+    SdramTiming.ExitSelfRefreshDelay = 9; // tXSR: 72ns/8.33ns -> 9 (必须满足)
+    SdramTiming.SelfRefreshTime      = 6; // tRAS: 42ns/8.33ns -> 6 (手册最小值)
+    SdramTiming.RowCycleDelay        = 8; // tRC: 必须 >= tRAS + tRP (6+2=8)
+    SdramTiming.WriteRecoveryTime    = 2; // tWR: 2ck (OK)
+    SdramTiming.RPDelay              = 2; // tRP: 15ns/8.33ns -> 2 (OK)
+    SdramTiming.RCDDelay             = 3; // tRCD: 18ns/8.33ns -> 3 (稳妥值)
 
   if (HAL_SDRAM_Init(&hsdram1, &SdramTiming) != HAL_OK)
   {
