@@ -81,7 +81,7 @@
           </BeforeMake>
           <AfterMake>
             <RunUserProg1>0</RunUserProg1>
-            <RunUserProg2>1</RunUserProg2>
+            <RunUserProg2>0</RunUserProg2>
             <UserProg1Name></UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H750xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Drivers;../../Template;../Middlewares;../Middlewares/SCPI/inc;../Middlewares/SCPI/common</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Drivers;../../Template;../Middlewares;../Middlewares/SCPI/inc;../Middlewares/SCPI/common;..\SCPI;..\SCPI\inc;..\SCPI\common</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1112,47 +1112,47 @@
             <File>
               <FileName>error.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\error.c</FilePath>
+              <FilePath>..\SCPI\src\error.c</FilePath>
             </File>
             <File>
               <FileName>expression.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\expression.c</FilePath>
+              <FilePath>..\SCPI\src\expression.c</FilePath>
             </File>
             <File>
               <FileName>fifo.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\fifo.c</FilePath>
+              <FilePath>..\SCPI\src\fifo.c</FilePath>
             </File>
             <File>
               <FileName>ieee488.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\ieee488.c</FilePath>
+              <FilePath>..\SCPI\src\ieee488.c</FilePath>
             </File>
             <File>
               <FileName>lexer.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\lexer.c</FilePath>
+              <FilePath>..\SCPI\src\lexer.c</FilePath>
             </File>
             <File>
               <FileName>minimal.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\minimal.c</FilePath>
+              <FilePath>..\SCPI\src\minimal.c</FilePath>
             </File>
             <File>
               <FileName>parser.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\parser.c</FilePath>
+              <FilePath>..\SCPI\src\parser.c</FilePath>
             </File>
             <File>
               <FileName>units.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\units.c</FilePath>
+              <FilePath>..\SCPI\src\units.c</FilePath>
             </File>
             <File>
               <FileName>utils.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\src\utils.c</FilePath>
+              <FilePath>..\SCPI\src\utils.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1162,12 +1162,12 @@
             <File>
               <FileName>scpi-def.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\common\scpi-def.c</FilePath>
+              <FilePath>..\SCPI\common\scpi-def.c</FilePath>
             </File>
             <File>
               <FileName>scpi-port.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Middlewares\SCPI\common\scpi-port.c</FilePath>
+              <FilePath>..\SCPI\common\scpi-port.c</FilePath>
             </File>
           </Files>
         </Group>

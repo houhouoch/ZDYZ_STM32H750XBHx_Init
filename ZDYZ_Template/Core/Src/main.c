@@ -89,7 +89,7 @@ int main(void)
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
+ // MPU_Config();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -111,7 +111,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART1_UART_Init();
-  MX_QUADSPI_Init();
+ // MX_QUADSPI_Init();
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
    led_init();
@@ -205,31 +205,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
-{
-    FDCAN_RxHeaderTypeDef RxHeader;
-    uint8_t RxData[8];
 
-    if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
-    {
-        /* �� FIFO 0 �а����ݰγ��� */
-        HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData);
-        
-        /* �򵥲��ԣ��յ�ʲô��������ԭ������ȥ�����ԣ� */
-        FDCAN_TxHeaderTypeDef TxHeader;
-        TxHeader.Identifier = RxHeader.Identifier + 1; // �� ID �� 1������۲�
-        TxHeader.IdType = FDCAN_STANDARD_ID;
-        TxHeader.TxFrameType = FDCAN_DATA_FRAME;
-        TxHeader.DataLength = RxHeader.DataLength;
-        TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-        TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
-        TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
-        TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-        TxHeader.MessageMarker = 0;
-        
-        HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &TxHeader, RxData);
-    }
-}
 /* USER CODE END 4 */
 
  /* MPU Configuration */
