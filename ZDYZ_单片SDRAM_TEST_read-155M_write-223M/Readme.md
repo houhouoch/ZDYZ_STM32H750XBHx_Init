@@ -79,3 +79,28 @@ SdramTiming.RowCycleDelay        = 7;
 SdramTiming.WriteRecoveryTime    = 2; // 代码生成后可手动微调
 SdramTiming.RPDelay              = 2;
 SdramTiming.RCDDelay             = 2;
+```
+> [!CAUTION]
+> **特别注意**：在 STM32CubeMX 图形界面中，由于内部公式校验，界面往往不允许将 `WriteRecoveryTime` 设置为 2（最少只能设为 5）。为了发挥最佳性能，我们需要在代码生成后，在 `fmc.c` 中**手动将该值改为 2**。
+
+### 📋 初始化序列逻辑
+1.  时钟使能 (`FMC_SDRAM_CMD_CLK_ENABLE`)。
+2.  等待周期 (至少 100us)。
+3.  全预充电 (`FMC_SDRAM_CMD_PALL`)。
+4.  自动刷新 (`FMC_SDRAM_CMD_AUTOREFRESH_MODE`)，建议执行 8 次。
+5.  加载模式寄存器 (`FMC_SDRAM_CMD_LOAD_MODE`)。
+6.  设置刷新率：在 120MHz 下配置为 **918** 以满足 64ms 刷新周期。
+
+---
+
+## 📊 5. 性能测试总结
+
+**测试环境**：HCLK 480MHz, FMC 120MHz, 开启 D-Cache。
+
+| 操作类型 | 理论带宽 (参考) | 实测表现 |
+| :--- | :--- | :--- |
+| **写入带宽** | 240MB/s | 约 150MB/s - 180MB/s |
+| **读取带宽** | 240MB/s | 约 180MB/s - 210MB/s |
+
+---
+/********************************** END **********************************/
