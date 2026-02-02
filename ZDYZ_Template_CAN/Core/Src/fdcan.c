@@ -44,11 +44,11 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
   hfdcan1.Init.NominalPrescaler = 5;
-  hfdcan1.Init.NominalSyncJumpWidth = 1;
+  hfdcan1.Init.NominalSyncJumpWidth = 4;
   hfdcan1.Init.NominalTimeSeg1 = 15;
   hfdcan1.Init.NominalTimeSeg2 = 4;
   hfdcan1.Init.DataPrescaler = 5;
-  hfdcan1.Init.DataSyncJumpWidth = 16;
+  hfdcan1.Init.DataSyncJumpWidth = 4;
   hfdcan1.Init.DataTimeSeg1 = 15;
   hfdcan1.Init.DataTimeSeg2 = 4;
   hfdcan1.Init.MessageRAMOffset = 0;
@@ -194,48 +194,44 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 
     if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
     {
-        HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData);
+        if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
+        {
+            // 所有的回读 ID 都在 0xA2100 到 0xA2104 之间
+            if ((RxHeader.Identifier >= 0xA2100) && (RxHeader.Identifier <= 0xA2104))
+            {
+                union {
+                    float f;
+                    uint8_t p[4];
+                } converter;
 
-//        /* 拦截电压回读 ID (假设为 0xA1100) */
-//        if (RxHeader.Identifier == 0xA2100)
-//        {
-//            union {
-//                float f;
-//                uint8_t p[4];
-//            } converter;
+                // 统一解析：从第4个字节开始，反向拼回小端序浮点数
+                converter.p[3] = RxData[4]; 
+                converter.p[2] = RxData[5];
+                converter.p[1] = RxData[6];
+                converter.p[0] = RxData[7];
 
-//            /* 注意：主机使用大端序发送，这里需反向解析 */
-//            converter.p[3] = RxData[0]; 
-//            converter.p[2] = RxData[1];
-//            converter.p[1] = RxData[2];
-//            converter.p[0] = RxData[3];
-
-//            /* 在串口打印出来，看看是不是主机的实时电压 */
-//            printf("Host Real-time Voltage: %.4f V\r\n", converter.f);
-//        }
+                switch (RxHeader.Identifier)
+                {
+                    case 0xA2100:
+                        printf("-> 实时测量电压: %.3f V\r\n", converter.f);
+                        break;
+//                    case 0xA2101:
+//                        printf("-> 实时测量电流: %.3f A\r\n", converter.f);
+//                        break;
+//                    case 0xA2104:
+//                        // 重点：这就是你想看的设置电压回读
+//                        printf("-> [确认] 从机设定电压为: %.3f V\r\n", converter.f);
+//                        break;
+//                    case 0xA2103:
+//                        // 状态位比较特殊，RxData[4..7] 存储的是状态标志位
+//                        printf("-> 设备状态码: 0x%02X%02X\r\n", RxData[4], RxData[5]);
+//                        break;
+                }
+            }
+        }
     }
 }
 
-void CAN_Test_Send(void)
-{
-    FDCAN_TxHeaderTypeDef TxHeader;
-    uint8_t TxData[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
 
-    /* ���÷��Ϳ��Ʋ��� */
-    TxHeader.Identifier = 0x123;                  /* ��׼ ID��11λ����Χ 0~0x7FF */
-    TxHeader.IdType = FDCAN_STANDARD_ID;          /* ��ȷ����Ӳ�������Ǳ�׼֡ */
-    TxHeader.TxFrameType = FDCAN_DATA_FRAME;      /* ֡���ͣ�����֡������Զ��֡�� */
-    TxHeader.DataLength = FDCAN_DLC_BYTES_8;      /* ���ݳ��ȣ�8 �ֽ� */
-    TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    TxHeader.BitRateSwitch = FDCAN_BRS_OFF;       /* ���л����ʣ����� CAN ģʽ�� */
-    TxHeader.FDFormat = FDCAN_CLASSIC_CAN;        /* ��ʽ������ CAN */
-    TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    TxHeader.MessageMarker = 0;
 
-    /* ����Ϣѹ�뷢�� FIFO ���� */
-    if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData) != HAL_OK)
-    {
-        printf("CAN failure \r\n");/* ����ʧ�ܣ�ͨ�����������߷�æ��Ӳ���������� */
-    }
-}
 /* USER CODE END 1 */
