@@ -115,6 +115,7 @@ void MX_FMC_Init(void)
   hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
   hsdram1.Init.ReadBurst = FMC_SDRAM_RBURST_ENABLE;
   hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_0;
+  FMC_Bank1_R->BTCR[0] &= ~FMC_BCR1_WFDIS;//可不加 因为FMC 的写 FIFO（Write FIFO）在复位后的默认状态通常就是开启的。   属于“防御性编程”
   /* SdramTiming */
   SdramTiming.LoadToActiveDelay = 2;
   SdramTiming.ExitSelfRefreshDelay = 9;

@@ -65,6 +65,9 @@ typedef struct {
 
 const FirmwareInfo_Def *firmwareInfo = 0;
 /* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 #define SDRAM_BANK_ADDR      (0xC0000000UL)
 #define SDRAM_CAPACITY_BYTES (64 * 1024 * 1024) 
 #define SDRAM_TOTAL_WORDS (64 * 1024 * 1024 / 4) //  64MB容量 / 每个uint32_t占用4字节 = 16M个测试单元
@@ -195,6 +198,40 @@ void SDRAM_ReadSpeed_Optimized(void)
                speed, (float)elapsed/1000000.0f);
     }
 }
+
+//FIFO干扰实验
+void SDRAM_FIFO_Comparison_Test(void)
+{
+    uint32_t elapsed_no_fifo, elapsed_with_fifo;
+    
+    printf("\r\n--- SDRAM FIFO Benefits Test (with 100KHz Interrupt) ---\r\n");
+
+    // 1. 开启高频中断干扰
+    HAL_TIM_Base_Start_IT(&htim3);
+
+    // --- 阶段 A: 关闭 FIFO 测试 ---
+    FMC_Bank1_R->BTCR[0] |= FMC_BCR1_WFDIS; // 禁止 FIFO
+    Get_System_Time(1);
+    SDRAM_WriteSpeed_Optimized(); // 调用你之前的 64MB 写入函数
+    elapsed_no_fifo = Get_System_Time(2);
+    printf("Result WITHOUT FIFO: %d MB/s\r\n", 64 * 1000000 / elapsed_no_fifo);
+
+    HAL_Delay(500); // 歇一会儿
+
+    // --- 阶段 B: 开启 FIFO 测试 ---
+    FMC_Bank1_R->BTCR[0] &= ~FMC_BCR1_WFDIS; // 开启 FIFO
+    Get_System_Time(1);
+    SDRAM_WriteSpeed_Optimized();
+    elapsed_with_fifo = Get_System_Time(2);
+    printf("Result WITH FIFO:    %d MB/s\r\n", 64 * 1000000 / elapsed_with_fifo);
+
+    // 关闭干扰
+    HAL_TIM_Base_Stop_IT(&htim3);
+
+    // 计算提升比例
+    float improvement = (float)(elapsed_no_fifo - elapsed_with_fifo) / elapsed_no_fifo * 100.0f;
+    printf("Performance Buffer Improvement: %.2f%%\r\n", improvement);
+}
 /* USER CODE END 0 */
 
 /**
@@ -217,7 +254,15 @@ int main(void)
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
-  //MPU_Config();
+//  MPU_Config();
+
+  /* Enable the CPU Cache */
+
+  /* Enable I-Cache---------------------------------------------------------*/
+  SCB_EnableICache();
+
+  /* Enable D-Cache---------------------------------------------------------*/
+  SCB_EnableDCache();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -225,11 +270,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  /* Enable I-Cache---------------------------------------------------------*/
-  SCB_EnableICache();
 
-  /* Enable D-Cache---------------------------------------------------------*/
-  SCB_EnableDCache();
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -247,6 +288,7 @@ int main(void)
   MX_FDCAN1_Init();
   MX_FMC_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
    led_init();
     LED0(0);   
@@ -292,6 +334,12 @@ int main(void)
             /* 测试SDRAM容量 */
             SDRAM_ReadSpeed_Optimized();
         }
+        if (key == WKUP_PRES)
+        {
+            /* 测试SDRAM容量 */
+            SDRAM_FIFO_Comparison_Test();
+        }
+        
         
         LED0(1);
         HAL_Delay(100);
@@ -410,7 +458,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+    if (htim->Instance == TIM3)
+    {
+        // 模拟一些计算开销，干扰 CPU
+        static volatile uint32_t dummy_cnt;
+        for(int i=0; i<50; i++) dummy_cnt++; 
+    }
   /* USER CODE END Callback 1 */
 }
 
