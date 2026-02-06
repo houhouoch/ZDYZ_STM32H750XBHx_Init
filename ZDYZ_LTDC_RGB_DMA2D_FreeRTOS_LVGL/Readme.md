@@ -162,4 +162,4 @@ void lv_demo_staggered_boxes(void) {
    - SDRAM 区域必须配置为 **Cacheable** 且 **Bufferable**，并建议开启 **Write-back**。否则，CPU 访问显存的速度会下降 10 倍以上。
 
 4. **显存计算公式**：
-   - 800x480 RGB565 每一帧占用空间：$$800 \times 480 \times 2 = 768,000 \text{ 字节}$$。确保 FB0 和 FB1 地址之间留足该空间。
+   - 800x480 RGB565 每一帧占用空间：Memory = 800 * 480 * 2 (RGB565) = 768,000 Bytes。确保 FB0 和 FB1 地址之间留足该空间。
