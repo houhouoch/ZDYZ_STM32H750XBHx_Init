@@ -11,7 +11,7 @@
 ## 🛠️ 一、 核心环境配置 (lv_conf.h)
 
 ### 1. 时钟心跳 (Tick)
-**心跳是动画的灵魂。** 必须开启硬件心跳并挂载到 FreeRTOS 的系统 Tick 上。
+**心跳是动画的灵魂。** 必须开启硬件心跳并挂载到 FreeRTOS 的系统 Tick 上，否则将不会呈现动画效果。
 
 ```c
 #define LV_TICK_CUSTOM 1
