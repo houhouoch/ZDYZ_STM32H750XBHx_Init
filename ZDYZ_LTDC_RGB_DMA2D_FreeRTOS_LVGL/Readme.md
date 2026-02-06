@@ -97,8 +97,6 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
     /* 2. 切换显存地址：color_p 会在 FB0/FB1 间自动切换 */
     HAL_LTDC_SetAddress(&hltdc, (uint32_t)color_p, 0);
     
-    /* 3. 强制在垂直消隐期重载地址，防止画面撕裂 (Tearing) */
-    HAL_LTDC_Reload(&hltdc, LTDC_RELOAD_VERTICAL_BLANKING);
     #endif
 
     lv_disp_flush_ready(disp_drv);
