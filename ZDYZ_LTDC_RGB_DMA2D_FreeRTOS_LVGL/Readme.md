@@ -23,7 +23,14 @@
 
 ### 2. 内存布局 (SDRAM 优先)
 由于 H750 内部 AXI SRAM 空间有限，建议将 LVGL 内存池设在外部 SDRAM。
+针对大规模 GUI 应用，内部 AXI SRAM (512KB) 往往无法支撑复杂的 UI 结构体。
 
+
+* **配置方案**：将内存池设在外部 SDRAM。
+
+* **优点**：空间充裕（本例设为 1MB），支持成百上千个复杂的 UI 对象同时存在。
+
+* **注意**：由于 SDRAM 挂在 FMC 总线上，访问速度略慢于内部 AXI 总线。
 ```c
 #define LV_MEM_SIZE (1024U * 1024U)          /* 1MB 内存池 */
 #define LV_MEM_ADR  0xC0800000               /* 挂载到 SDRAM 偏移 8MB 处，避开显存 */
