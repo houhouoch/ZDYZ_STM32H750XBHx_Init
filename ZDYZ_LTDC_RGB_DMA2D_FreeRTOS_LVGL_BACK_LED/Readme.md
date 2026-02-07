@@ -1,6 +1,6 @@
-# 🚀 STM32H750 + LVGL v8.3 高性能电力测量仪 UI 系统
+# 🚀 STM32H750 + LVGL v8.3
 
-本项目基于 **STM32H750XBHx** 开发，旨在构建一套高性能、高可靠性的电力测量仪器用户界面。通过深度优化 LVGL v8.3 渲染引擎，实现了丝滑的视觉交互与严谨的硬件协同。
+本项目基于 **STM32H750XBHx** 开发
 
 ---
 
@@ -46,7 +46,7 @@ static void __Boot_Display_Logo(void)
 
 ## 💡 二、 运行状态指示系统 (UX Design)
 
-为了实时监控 UI 任务状态，设计了呼吸灯模式指示器。相比于枯燥的闪烁，呼吸模式（快吸慢呼）更能传达系统的“生命感”与运行稳健性。
+为了实时监控 UI 任务状态，设计了呼吸灯模式指示器。
 
 ### ⚙️ 模块化封装
 ```c
@@ -78,18 +78,3 @@ void ui_led_start_asymmetric_breathing(lv_obj_t *led_obj) {
     * [CloudConvert (SVG to PNG)](https://cloudconvert.com/svg-to-png)
     * [SVGtoPNG Official](https://svgtopng.com/zh/)
 4.  **导入工程**：通过 **GUI Guider** 将 PNG 转化为 LVGL C 数组，利用 H7 的 **DMA2D (Chrom-Art)** 硬件加速实现透明边缘渲染。
-
----
-
-## 🔍 四、 技术要点补充 (Knowledge Base)
-
-| 技术点 | 细节描述 | 补充建议 |
-| :--- | :--- | :--- |
-| **内存对齐** | H750 访问 QSPI 图片时需注意 Cache 一致性 | 建议在 `flush_cb` 中执行 `SCB_CleanInvalidateDCache` |
-| **CPU 优化** | 呼吸灯在高分辨率下可能占用较多重绘资源 | 务必执行 `lv_obj_set_style_shadow_width(obj, 0, 0)` 关掉阴影 |
-| **UI 架构** | 采用 `GroupCreate` + `Enter/Exit` 机制 | 方便多页面间快速移植，防止定时器内存泄漏 |
-
----
-
-### 📖 开发者备注
-本项目 UI 架构旨在平衡 **视觉美感** 与 **实时性**。在处理电力测量的高频采样数据时，通过零拷贝双缓冲技术，确保了 UI 刷新不干扰底层中断任务。
