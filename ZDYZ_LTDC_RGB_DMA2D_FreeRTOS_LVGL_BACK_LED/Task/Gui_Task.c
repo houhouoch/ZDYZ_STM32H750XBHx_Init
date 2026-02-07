@@ -76,7 +76,7 @@ static void __Load_Page(void)
     {
     __Boot_Display_Logo();
     }
-    // HomePage_GroupCreate();
+     HomePage_GroupCreate();
 //    // 5. Ç¿ÖÆË¢ÐÂ
 //    lv_obj_invalidate(ui.screen_cont_1); 
     
