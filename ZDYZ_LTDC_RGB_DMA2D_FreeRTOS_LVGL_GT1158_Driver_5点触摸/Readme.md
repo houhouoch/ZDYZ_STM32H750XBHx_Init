@@ -1,149 +1,89 @@
-# 🚀 STM32H750 + LVGL 触摸屏驱动移植笔记 (Goodix GT1151Q/GT1158)
+# 🚀 GT1158/GT1151 多点触摸测试说明 (v2.0 更新)
 
-本仓库记录了将 **Goodix (汇顶)** 电容触摸芯片（GT1151Q/GT1158）移植到 **STM32H750** 平台并接入 **LVGL v8.x** 的完整过程。
-
----
-
-## ⚠️ 避坑指南：硬件与原理图
-
-1.  **不要盲信丝印**：正点原子等开发板的原理图丝印标号是为了通用性设计的，**不要看原理图上的标号！**
-2.  **以例程定义为准**：直接参考官方例程中的引脚定义，并在 **STM32CubeMX** 中进行手动配置。
-3.  **核心引脚**：触摸 IC 只需要配置 **4 个** 关键引脚：
-    * **IIC_SCL / IIC_SDA**：用于数据通信。
-    * **INT (中断)**：接收触摸触发信号，同时参与上电地址选择。
-    * **RST (复位)**：用于硬件复位触摸芯片。
+本更新增加了对 **5 点触摸** 的底层支持。虽然在标准的 GUI 交互（如 LVGL）中通常只处理单点信号，但底层驱动的升级能够更准确地反馈硬件性能，并为后续的手势识别提供基础。
 
 ---
 
-## 1. 底层模拟 IIC 驱动
+## 1. LVGL 输入设备限制说明
 
-在 H750 这种 480MHz 的高主频芯片下，为了简单且稳定地实现 IIC 延时，采用 `volatile` 关键字防止编译器优化的简单循环。
+在 LVGL 的输入设备驱动（indev）中，类型为 `LV_INDEV_TYPE_POINTER` 的设备在处理标准控件（按钮、滑块等）时，默认只会消耗 **第 1 个触摸点**。
 
-### 延时函数实现
+* **单点交互**：LVGL 核心逻辑仅消耗 `tp[0]` 的坐标。
+* **多点调试**：为了验证硬件可靠性，驱动层会读取全部 5 个点并通过串口打印。这有助于判断电容屏在多指点击时的灵敏度及是否存在坐标跳变。
+
+
+
+---
+
+## 2. 寄存器定义更新
+
+GT115x 系列芯片每组触摸点数据占用 **8 字节** 空间。为了支持 5 点触摸，新增了以下寄存器基地址定义：
+
 ```c
-/**
- * @brief   电容触摸屏IIC简易循环延时函数
- * @note    在 H750 @ 480MHz 下，循环 120 次产生约 1~2us 的延时
- */
-static void ct_iic_delay(void)
+/* 触摸点寄存器基地址定义 */
+#define CT_REG_TP1           0x8150  // 触摸点 1 基地址
+#define CT_REG_TP2           0x8158  // 触摸点 2 基地址
+#define CT_REG_TP3           0x8160  // 触摸点 3 基地址
+#define CT_REG_TP4           0x8168  // 触摸点 4 基地址
+#define CT_REG_TP5           0x8170  // 触摸点 5 基地址
+```
+
+---
+
+## 3. 驱动核心代码修改
+
+### 3.1 扫描函数 `touch_scan` 优化
+更新后的 `touch_scan` 支持传入一个数组地址。它会根据芯片上报的实际点数（`tp_info & 0x0F`），自动循环读取对应的寄存器组。
+
+### 3.2 LVGL 适配层 `touchpad_read`
+**⚠️ 内存安全提醒**：为了防止多点触摸时上报点数超出预期导致 **HardFault**，必须在函数内部定义足够大的数组。
+
+```c
+static void touchpad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
 {
-    /* 使用 volatile 防止循环被编译器优化删除 */
-    volatile uint32_t i = 120; 
-    while(i--);
-}
-```
-
-### 引脚定义示例
-```c
-/* 使用模拟IIC驱动触摸芯片 */
-#define CT_IIC_SCL_GPIO_PORT            GPIOH
-#define CT_IIC_SCL_GPIO_PIN             GPIO_PIN_6
-#define CT_IIC_SCL_GPIO_CLK_ENABLE()    do { __HAL_RCC_GPIOH_CLK_ENABLE(); } while (0)
-
-#define CT_IIC_SDA_GPIO_PORT            GPIOG
-#define CT_IIC_SDA_GPIO_PIN             GPIO_PIN_7
-#define CT_IIC_SDA_GPIO_CLK_ENABLE()    do { __HAL_RCC_GPIOG_CLK_ENABLE(); } while (0)
-```
-
----
-
-## 2. INT 引脚的“一专多能”
-
-
-
-在初始化阶段，INT 引脚承担了决定 I2C 设备地址的重任：
-
-1.  **输出模式**：在 RST 复位瞬间，通过输出高/低电平来选定芯片的 I2C 地址（通常选定 0x14）。
-2.  **切换模式**：初始化完成后，必须将 INT 切换回**浮空输入（中断）**模式，用于接收触摸信号。
-
----
-
-## 3. LVGL 接口集成 (lv_port_indev.c)
-
-将触摸扫描函数 `touch_scan` 封装并注册到 LVGL 的输入设备管理中。
-
-```c
-static void touchpad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data){
-    touch_point_t tp;
+    /* 1. 定义 5 点数组空间，防止多指按下时踩掉栈内存 */
+    touch_point_t tp[5];
     uint8_t touch_cnt;
 
-    // 扫描 1 个点即可（LVGL 基础控件通常只用单点）
-    touch_cnt = touch_scan(&tp, 1);
+    /* 2. 扫描硬件，获取当前所有触点数据 */
+    touch_cnt = touch_scan(tp, 5);
 
     if(touch_cnt > 0) {
         data->state = LV_INDEV_STATE_PR; // 设置为按下状态
         
-        /* 【重要】坐标转换 */
-        /* GT1151Q/GT1158 的原始方向可能与 LCD 不一致，此处需进行映射 */
-        data->point.x = 800 - tp.x;  // 处理左右反向
-        data->point.y = 480 - tp.y;  // 处理上下反向
+        /* 3. 坐标转换与反馈（仅将第一个点 tp[0] 反馈给 LVGL） */
+        /* 根据 800x480 屏幕安装方向进行镜像处理 */
+        data->point.x = 800 - tp[0].x;
+        data->point.y = 480 - tp[0].y;
+        
+        /* 4. 调试输出：串口打印所有触点坐标，用于硬件性能评估 */
+        printf("Detected Points: %d\n", touch_cnt);
+        for(uint8_t i = 0; i < touch_cnt; i++) {
+            printf("  Point[%d]: X=%d, Y=%d\n", i, tp[i].x, tp[i].y);
+        }
     }
     else {
         data->state = LV_INDEV_STATE_REL; // 设置为松开状态
     }
 }
-
-void lv_port_indev_init(void){
-    static lv_indev_drv_t indev_drv;
-    
-    // 初始化触摸硬件（读取 PID，确保是 1151 或 1158）
-    if(touch_init() != TOUCH_OK) {
-        // Error Handling...
-    }
-
-    /* 注册触摸指针设备 */
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = touchpad_read;
-    lv_indev_touchpad = lv_indev_drv_register(&indev_drv);
-}
 ```
 
 ---
 
-## 4. 触摸功能测试
+## 💡 4. 调试要点与注意事项
 
-创建一个简单的按钮，验证整个链路（硬件 -> IIC -> 驱动 -> LVGL -> UI）是否通畅。
+### 🔴 内存安全 (Memory Safety)
+切勿将 `touch_scan` 的 `max_points` 参数设为大于接收数组长度的值。如果硬件上报了 5 个点，但你的数组只有 1 个空间，系统会立即崩溃。
 
-```c
-static void test_btn_event_cb(lv_event_t * e){
-    if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        static uint8_t cnt = 0;
-        cnt++;
-        lv_obj_t * btn = lv_event_get_target(e);
+### 📏 坐标映射
+如果发现触摸位置与屏幕显示相反，请检查以下逻辑：
+* **水平翻转**：$x_{\text{new}} = 800 - x_{\text{raw}}$
+* **垂直翻转**：$y_{\text{new}} = 480 - y_{\text{raw}}$
 
-        // 颜色切换反馈
-        lv_color_t colors[] = {lv_palette_main(LV_PALETTE_GREEN), 
-                               lv_palette_main(LV_PALETTE_BLUE), 
-                               lv_palette_main(LV_PALETTE_ORANGE)};
-        lv_obj_set_style_bg_color(btn, colors[cnt % 3], 0);
-    }
-}
-
-void ui_create_test_button(void){
-    lv_obj_t * btn = lv_btn_create(lv_scr_act()); 
-    lv_obj_set_size(btn, 200, 80);
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 0);
-
-    lv_obj_t * label = lv_label_create(btn);
-    lv_label_set_text(label, "TOUCH TEST");
-    lv_obj_center(label);
-
-    lv_obj_add_event_cb(btn, test_btn_event_cb, LV_EVENT_ALL, NULL);
-}
-```
+### 🧹 状态清除 (Status Clear)
+**最易忽略的细节**：在 `touch_scan` 解析完数据后，必须向 `CT_REG_TPINFO` 写入 **0**。如果未清零，触摸芯片会认为 CPU 尚未处理完当前数据，从而停止产生下一次中断或更新寄存器。
 
 ---
 
-## 📝 坐标校准总结
-
-由于 800x480 屏幕的安装方向各异，坐标映射是成功的最后一步。
-
-| 现象判定 | 修正逻辑 | 示例代码 |
-| :--- | :--- | :--- |
-| **点击正常** | 无需修改 | `data->point.x = tp.x;` |
-| **左右反向** | X 轴反向 | `data->point.x = 800 - tp.x;` |
-| **上下反向** | Y 轴反向 | `data->point.y = 480 - tp.y;` |
-| **横竖屏错乱** | X/Y 轴互换 | `data->point.x = tp.y; data->point.y = tp.x;` |
-
-> **作者注**：在本工程中，触摸 IC 坐标与 UI 坐标上下左右均相反，已在 `touchpad_read` 中完成修正。
+### 📖 开发者寄语
+本次多点支持的意义不仅在于数据量的增加，更在于**驱动健壮性**的提升。在电力测量仪这种复杂的电磁环境下，能够稳定读取多点信号是过滤噪声、防止误触的基础。
