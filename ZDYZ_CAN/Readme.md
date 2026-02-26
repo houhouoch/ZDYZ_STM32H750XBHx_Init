@@ -1,149 +1,96 @@
-# 🚀 STM32H750 + LVGL 触摸屏驱动移植笔记 (Goodix GT1151Q/GT1158)
+# 🚀 STM32H750 FDCAN 通信实验项目 (Classic CAN 模式)
 
-本仓库记录了将 **Goodix (汇顶)** 电容触摸芯片（GT1151Q/GT1158）移植到 **STM32H750** 平台并接入 **LVGL v8.x** 的完整过程。
-
----
-
-## ⚠️ 避坑指南：硬件与原理图
-
-1.  **不要盲信丝印**：正点原子等开发板的原理图丝印标号是为了通用性设计的，**不要看原理图上的标号！**
-2.  **以例程定义为准**：直接参考官方例程中的引脚定义，并在 **STM32CubeMX** 中进行手动配置。
-3.  **核心引脚**：触摸 IC 只需要配置 **4 个** 关键引脚：
-    * **IIC_SCL / IIC_SDA**：用于数据通信。
-    * **INT (中断)**：接收触摸触发信号，同时参与上电地址选择。
-    * **RST (复位)**：用于硬件复位触摸芯片。
+本项目基于 **STM32H750** 微控制器，展示了如何配置和使用 FDCAN 外设进行经典 CAN（Classic CAN）通信。通过硬件过滤器、中断接收和灵活的发送函数，实现了一个高效、可靠的嵌入式通信框架。
 
 ---
 
-## 1. 底层模拟 IIC 驱动
+## 📅 项目概览
 
-在 H750 这种 480MHz 的高主频芯片下，为了简单且稳定地实现 IIC 延时，采用 `volatile` 关键字防止编译器优化的简单循环。
+该实验实现了以下核心功能：
+* **多格式发送**：支持固定 ID 发送与动态 ID/长度发送。
+* **双重硬件过滤**：同时配置了标准帧（11位）与扩展帧（29位）过滤器。
 
-### 延时函数实现
+---
+
+## 📖 核心知识点：什么是 CAN 通信？
+
+在深入代码之前，我们需要了解 CAN（Controller Area Network）协议的两个核心概念：
+
+### 1. 帧格式 (Frame Formats)
+本项目主要涵盖了两种帧格式：
+
+| 格式 | ID 长度 | ID 范围 | 应用场景 |
+| :--- | :--- | :--- | :--- |
+| **标准帧 (Standard)** | 11 位 | 0x000 ~ 0x7FF | 工业控制、简单命令。 |
+| **扩展帧 (Extended)** | 29 位 | 0x000 ~ 0x1FFFFFFF | 复杂网络、汽车 J1939 协议。 |
+
+
+
+**原理**：硬件通过 **IDE 位** 来区分这两种格式。本项目通过配置两个不同的过滤器赛道，确保两类数据都能被正确捕获。
+
+### 2. 帧类型 (Frame Types)
+* **数据帧 (Data Frame)**：携带实际荷载信息的“搬运工”。（本项目重点）
+* **远程帧 (Remote Frame)**：用于向其他节点“请求”数据，不带数据段。
+
+---
+
+## 🛠️ 技术实现细节
+
+### 1. 硬件门卫：过滤器配置
+为了减轻 CPU 的负担，本项目使用了硬件过滤器。只有匹配特定 ID 的报文才会触发中断。
+
+
+
+* **标准位过滤器**：精准匹配 `0x123`。
+* **扩展位过滤器**：精准匹配 `0x1234567`。
+* **全局策略**：默认丢弃（REJECT）所有未在白名单内的报文，确保系统不受干扰。
+
+### 2. 灵活的发送接口
+项目中提供了两个维度的发送函数：
+* `FDCAN1_Send_Msg`：用于发送固定 ID 的 8 字节心跳或状态数据。
+* `FDCAN1_Send_Any_Msg`：通用接口，支持动态指定 ID 和 数据长度 (DLC)。
+
+### 3. 中断接收逻辑
+接收采用 `HAL_FDCAN_RxFifo0Callback` 回调函数。当新报文到达时：
+1.  硬件自动将数据存入 Rx FIFO0。
+2.  触发中断，由 `HAL_FDCAN_GetRxMessage` 提取数据。
+3.  通过串口（USART1）实时打印报文 ID、长度及十六进制内容。
+
+---
+
+## ⚠️ 开发注意事项 (Tips for Readers)
+
+1.  **数据长度解析**：在 FDCAN 中，`DataLength` 是一个 32 位宏（如 `0x00080000`）。在解析实际字节数时，需要正确处理位移或直接读取有效位。
+2.  **中断性能**：本实验在中断中使用了 `printf`。在正式工业项目中，建议将打印逻辑移至 `while(1)` 循环中，通过标志位触发，以避免阻塞总线造成丢帧。
+3.  **H7 时钟树**：FDCAN 对波特率精度要求极高。本项目配置 `NominalPrescaler = 5`，基于 HSE 时钟源，确保了 **500Kbps** 的稳定通信。
+
+
+
+---
+
+## 📂 关键代码片段
+
+### 动态发送实现逻辑
 ```c
-/**
- * @brief   电容触摸屏IIC简易循环延时函数
- * @note    在 H750 @ 480MHz 下，循环 120 次产生约 1~2us 的延时
- */
-static void ct_iic_delay(void)
-{
-    /* 使用 volatile 防止循环被编译器优化删除 */
-    volatile uint32_t i = 120; 
-    while(i--);
+// 支持 1~8 字节长度的动态匹配转换
+switch(len) {
+    case 1: TxHeader.DataLength = FDCAN_DLC_BYTES_1; break;
+    case 2: TxHeader.DataLength = FDCAN_DLC_BYTES_2; break;
+    case 3: TxHeader.DataLength = FDCAN_DLC_BYTES_3; break;
+    case 4: TxHeader.DataLength = FDCAN_DLC_BYTES_4; break;
+    case 5: TxHeader.DataLength = FDCAN_DLC_BYTES_5; break;
+    case 6: TxHeader.DataLength = FDCAN_DLC_BYTES_6; break;
+    case 7: TxHeader.DataLength = FDCAN_DLC_BYTES_7; break;
+    case 8: TxHeader.DataLength = FDCAN_DLC_BYTES_8; break;
 }
-```
 
-### 引脚定义示例
-```c
-/* 使用模拟IIC驱动触摸芯片 */
-#define CT_IIC_SCL_GPIO_PORT            GPIOH
-#define CT_IIC_SCL_GPIO_PIN             GPIO_PIN_6
-#define CT_IIC_SCL_GPIO_CLK_ENABLE()    do { __HAL_RCC_GPIOH_CLK_ENABLE(); } while (0)
-
-#define CT_IIC_SDA_GPIO_PORT            GPIOG
-#define CT_IIC_SDA_GPIO_PIN             GPIO_PIN_7
-#define CT_IIC_SDA_GPIO_CLK_ENABLE()    do { __HAL_RCC_GPIOG_CLK_ENABLE(); } while (0)
-```
-
----
-
-## 2. INT 引脚的“一专多能”
-
-
-
-在初始化阶段，INT 引脚承担了决定 I2C 设备地址的重任：
-
-1.  **输出模式**：在 RST 复位瞬间，通过输出高/低电平来选定芯片的 I2C 地址（通常选定 0x14）。
-2.  **切换模式**：初始化完成后，必须将 INT 切换回**浮空输入（中断）**模式，用于接收触摸信号。
-
----
-
-## 3. LVGL 接口集成 (lv_port_indev.c)
-
-将触摸扫描函数 `touch_scan` 封装并注册到 LVGL 的输入设备管理中。
-
-```c
-static void touchpad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data){
-    touch_point_t tp;
-    uint8_t touch_cnt;
-
-    // 扫描 1 个点即可（LVGL 基础控件通常只用单点）
-    touch_cnt = touch_scan(&tp, 1);
-
-    if(touch_cnt > 0) {
-        data->state = LV_INDEV_STATE_PR; // 设置为按下状态
-        
-        /* 【重要】坐标转换 */
-        /* GT1151Q/GT1158 的原始方向可能与 LCD 不一致，此处需进行映射 */
-        data->point.x = 800 - tp.x;  // 处理左右反向
-        data->point.y = 480 - tp.y;  // 处理上下反向
-    }
-    else {
-        data->state = LV_INDEV_STATE_REL; // 设置为松开状态
-    }
-}
-
-void lv_port_indev_init(void){
-    static lv_indev_drv_t indev_drv;
-    
-    // 初始化触摸硬件（读取 PID，确保是 1151 或 1158）
-    if(touch_init() != TOUCH_OK) {
-        // Error Handling...
-    }
-
-    /* 注册触摸指针设备 */
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = touchpad_read;
-    lv_indev_touchpad = lv_indev_drv_register(&indev_drv);
+// 将消息添加至发送 FIFO 队列
+if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, tx_buf) != HAL_OK) {
+    // 发送失败处理...
 }
 ```
 
 ---
 
-## 4. 触摸功能测试
-
-创建一个简单的按钮，验证整个链路（硬件 -> IIC -> 驱动 -> LVGL -> UI）是否通畅。
-
-```c
-static void test_btn_event_cb(lv_event_t * e){
-    if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        static uint8_t cnt = 0;
-        cnt++;
-        lv_obj_t * btn = lv_event_get_target(e);
-
-        // 颜色切换反馈
-        lv_color_t colors[] = {lv_palette_main(LV_PALETTE_GREEN), 
-                               lv_palette_main(LV_PALETTE_BLUE), 
-                               lv_palette_main(LV_PALETTE_ORANGE)};
-        lv_obj_set_style_bg_color(btn, colors[cnt % 3], 0);
-    }
-}
-
-void ui_create_test_button(void){
-    lv_obj_t * btn = lv_btn_create(lv_scr_act()); 
-    lv_obj_set_size(btn, 200, 80);
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 0);
-
-    lv_obj_t * label = lv_label_create(btn);
-    lv_label_set_text(label, "TOUCH TEST");
-    lv_obj_center(label);
-
-    lv_obj_add_event_cb(btn, test_btn_event_cb, LV_EVENT_ALL, NULL);
-}
-```
-
----
-
-## 📝 坐标校准总结
-
-由于 800x480 屏幕的安装方向各异，坐标映射是成功的最后一步。
-
-| 现象判定 | 修正逻辑 | 示例代码 |
-| :--- | :--- | :--- |
-| **点击正常** | 无需修改 | `data->point.x = tp.x;` |
-| **左右反向** | X 轴反向 | `data->point.x = 800 - tp.x;` |
-| **上下反向** | Y 轴反向 | `data->point.y = 480 - tp.y;` |
-| **横竖屏错乱** | X/Y 轴互换 | `data->point.x = tp.y; data->point.y = tp.x;` |
-
-> **作者注**：在本工程中，触摸 IC 坐标与 UI 坐标上下左右均相反，已在 `touchpad_read` 中完成修正。
+### 📖 开发者寄语
+FDCAN 虽然向下兼容经典 CAN，但在寄存器配置和长度表示（DLC）上与旧款 bxCAN 差异巨大。本项目通过“白名单”机制，展示了 H750 处理高频通信时的高效性。
