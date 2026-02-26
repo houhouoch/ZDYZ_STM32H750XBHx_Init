@@ -1,149 +1,112 @@
-# 🚀 STM32H750 + LVGL 触摸屏驱动移植笔记 (Goodix GT1151Q/GT1158)
+# 🧠 LVGL 逻辑树 UI 框架：从“UI 驱动”到“逻辑驱动”的演进
 
-本仓库记录了将 **Goodix (汇顶)** 电容触摸芯片（GT1151Q/GT1158）移植到 **STM32H750** 平台并接入 **LVGL v8.x** 的完整过程。
-
----
-
-## ⚠️ 避坑指南：硬件与原理图
-
-1.  **不要盲信丝印**：正点原子等开发板的原理图丝印标号是为了通用性设计的，**不要看原理图上的标号！**
-2.  **以例程定义为准**：直接参考官方例程中的引脚定义，并在 **STM32CubeMX** 中进行手动配置。
-3.  **核心引脚**：触摸 IC 只需要配置 **4 个** 关键引脚：
-    * **IIC_SCL / IIC_SDA**：用于数据通信。
-    * **INT (中断)**：接收触摸触发信号，同时参与上电地址选择。
-    * **RST (复位)**：用于硬件复位触摸芯片。
+本仓库实现了一套基于 **LVGL v8.3** 的嵌入式 UI 框架。通过舍弃传统的底部虚拟按键（Virtual Button Bar），引入多层级逻辑树，实现了硬件按键与 UI 逻辑的深度解耦。
 
 ---
 
-## 1. 底层模拟 IIC 驱动
+## 🎯 核心设计思想：逻辑驱动 (Logic Driven)
 
-在 H750 这种 480MHz 的高主频芯片下，为了简单且稳定地实现 IIC 延时，采用 `volatile` 关键字防止编译器优化的简单循环。
+传统的 UI 设计往往是“看到什么点什么”。但在嵌入式领域，屏幕空间有限且多依赖物理按键。
+我们的核心逻辑是：**物理按键 -> 逻辑状态机 (Tree) -> UI 部件 (LVGL Object)**。
 
-### 延时函数实现
+
+
+---
+
+## 📚 关键知识点解析
+
+### 1. 按键状态机的解耦 (Key Mapping Table)
+**为什么要用映射表？**
+避免在按键驱动中硬编码业务逻辑（如 `if(key==ID_KEY2) voltage--`）。通过“查表法”，我们将物理动作转化为标准的 LVGL 逻辑键值。
+
+#### **核心代码实现**
 ```c
-/**
- * @brief   电容触摸屏IIC简易循环延时函数
- * @note    在 H750 @ 480MHz 下，循环 120 次产生约 1~2us 的延时
- */
-static void ct_iic_delay(void)
-{
-    /* 使用 volatile 防止循环被编译器优化删除 */
-    volatile uint32_t i = 120; 
-    while(i--);
+// 映射表：将硬件物理 ID 与 UI 逻辑功能解耦
+static const Button_KeyTable_Def Btn_KeyTable[] = {
+    // 物理ID      | 短按(弹起触发) | 长按(1.5s触发)      | 按住(50ms拦截)
+    {ID_KEY2,      LV_KEY_DOWN,   LV_KEY_DOWN,         LV_KEY_DEFAULT}, 
+    {ID_WKUP,      LV_KEY_UP,     LV_KEY_UP,           LV_KEY_DEFAULT},
+};
+
+// 状态过滤逻辑：解决“快按触发两次”的痛点
+lv_key_t Button_toKey(uint8_t buttonNum, uint8_t flag) {
+    // ... 内部查表逻辑 ...
+    switch(flag) {
+        case KEY_STATE_CLICKED: return pTable->key_short; // 只有弹起才算有效点击
+        case KEY_STATE_LONGGP:  return pTable->key_long;  // 长按触发独立逻辑
+        default:                return LV_KEY_DEFAULT;    // 拦截 HOLD 状态，防止双击
+    }
 }
-```
-
-### 引脚定义示例
-```c
-/* 使用模拟IIC驱动触摸芯片 */
-#define CT_IIC_SCL_GPIO_PORT            GPIOH
-#define CT_IIC_SCL_GPIO_PIN             GPIO_PIN_6
-#define CT_IIC_SCL_GPIO_CLK_ENABLE()    do { __HAL_RCC_GPIOH_CLK_ENABLE(); } while (0)
-
-#define CT_IIC_SDA_GPIO_PORT            GPIOG
-#define CT_IIC_SDA_GPIO_PIN             GPIO_PIN_7
-#define CT_IIC_SDA_GPIO_CLK_ENABLE()    do { __HAL_RCC_GPIOG_CLK_ENABLE(); } while (0)
 ```
 
 ---
 
-## 2. INT 引脚的“一专多能”
+### 2. 树状状态机 (Tree State Machine)
+我们将每一个页面、每一个可编辑的输入框都看作树的一个“节点”。
+
+* **uiNode (页面节点)**：控制当前的图层切换。
+* **selNode (聚焦节点)**：控制按键流向哪一个具体的 UI 部件（如：电压输入框）。
 
 
 
-在初始化阶段，INT 引脚承担了决定 I2C 设备地址的重任：
-
-1.  **输出模式**：在 RST 复位瞬间，通过输出高/低电平来选定芯片的 I2C 地址（通常选定 0x14）。
-2.  **切换模式**：初始化完成后，必须将 INT 切换回**浮空输入（中断）**模式，用于接收触摸信号。
-
----
-
-## 3. LVGL 接口集成 (lv_port_indev.c)
-
-将触摸扫描函数 `touch_scan` 封装并注册到 LVGL 的输入设备管理中。
-
+#### **节点进入逻辑**
 ```c
-static void touchpad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data){
-    touch_point_t tp;
-    uint8_t touch_cnt;
-
-    // 扫描 1 个点即可（LVGL 基础控件通常只用单点）
-    touch_cnt = touch_scan(&tp, 1);
-
-    if(touch_cnt > 0) {
-        data->state = LV_INDEV_STATE_PR; // 设置为按下状态
-        
-        /* 【重要】坐标转换 */
-        /* GT1151Q/GT1158 的原始方向可能与 LCD 不一致，此处需进行映射 */
-        data->point.x = 800 - tp.x;  // 处理左右反向
-        data->point.y = 480 - tp.y;  // 处理上下反向
-    }
-    else {
-        data->state = LV_INDEV_STATE_REL; // 设置为松开状态
-    }
-}
-
-void lv_port_indev_init(void){
-    static lv_indev_drv_t indev_drv;
+void Tree_UI_Sel_Enter(Tree_Def *node, uint8_t longFlag) {
+    const struct BtnInfo_Def *pdata = node->pdata;
     
-    // 初始化触摸硬件（读取 PID，确保是 1151 或 1158）
-    if(touch_init() != TOUCH_OK) {
-        // Error Handling...
+    if(pdata->type == BTN_TYPE_SEL) {  // 如果是对象编辑类型
+        tree_ui.selNode = node;         // 记录当前选中的节点
+        lv_obj_add_state(*pdata->obj, LV_STATE_FOCUSED); // 让部件进入高亮状态
+        lv_event_send(*pdata->obj, LV_EVENT_FOCUSED, NULL); // 触发业务层初始化
     }
-
-    /* 注册触摸指针设备 */
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = touchpad_read;
-    lv_indev_touchpad = lv_indev_drv_register(&indev_drv);
 }
 ```
 
 ---
 
-## 4. 触摸功能测试
+### 3. LVGL 键值偏移与类型截断 (Type Truncation)
+**⚠️ 避坑指南**：在 LVGL v8.3 中，`lv_event_get_key(e)` 有时会返回带有 `0xE000` 偏移的 32 位键值（例如 `LV_KEY_DOWN` 变成 `57362`）。
 
-创建一个简单的按钮，验证整个链路（硬件 -> IIC -> 驱动 -> LVGL -> UI）是否通畅。
+**解决方案**：利用 C 语言的**类型截断**特性。将 `uint32_t` 赋值给 `uint8_t` (即 `lv_key_t`)，会自动丢弃高位的偏移，只保留低 8 位的标准枚举值。
 
 ```c
-static void test_btn_event_cb(lv_event_t * e){
-    if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        static uint8_t cnt = 0;
-        cnt++;
-        lv_obj_t * btn = lv_event_get_target(e);
-
-        // 颜色切换反馈
-        lv_color_t colors[] = {lv_palette_main(LV_PALETTE_GREEN), 
-                               lv_palette_main(LV_PALETTE_BLUE), 
-                               lv_palette_main(LV_PALETTE_ORANGE)};
-        lv_obj_set_style_bg_color(btn, colors[cnt % 3], 0);
+// 业务层处理：干净、直接
+case LV_EVENT_KEY: {
+    lv_key_t key = (lv_key_t)lv_event_get_key(e); // 自动将 57362 截断为 18
+    if(key == LV_KEY_DOWN) {
+        current_v -= step; // 完美匹配标准枚举值
     }
-}
-
-void ui_create_test_button(void){
-    lv_obj_t * btn = lv_btn_create(lv_scr_act()); 
-    lv_obj_set_size(btn, 200, 80);
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 0);
-
-    lv_obj_t * label = lv_label_create(btn);
-    lv_label_set_text(label, "TOUCH TEST");
-    lv_obj_center(label);
-
-    lv_obj_add_event_cb(btn, test_btn_event_cb, LV_EVENT_ALL, NULL);
 }
 ```
 
 ---
 
-## 📝 坐标校准总结
+### 4. 递归事件分发 (Recursive Event Sending)
+当底层参数（如电源输出状态）变化时，需要同步刷新界面上所有相关的图标和文字。
 
-由于 800x480 屏幕的安装方向各异，坐标映射是成功的最后一步。
+```c
+void lv_event_send_recursive(lv_obj_t * obj, lv_event_code_t code, void * param) {
+    lv_event_send(obj, code, param); // 先发给自己
+    
+    // 遍历所有子对象，实现“牵一发而动全身”的同步刷新
+    uint32_t child_cnt = lv_obj_get_child_cnt(obj);
+    for(uint32_t i = 0; i < child_cnt; i++) {
+        lv_event_send_recursive(lv_obj_get_child(obj, i), code, param);
+    }
+}
+```
 
-| 现象判定 | 修正逻辑 | 示例代码 |
-| :--- | :--- | :--- |
-| **点击正常** | 无需修改 | `data->point.x = tp.x;` |
-| **左右反向** | X 轴反向 | `data->point.x = 800 - tp.x;` |
-| **上下反向** | Y 轴反向 | `data->point.y = 480 - tp.y;` |
-| **横竖屏错乱** | X/Y 轴互换 | `data->point.x = tp.y; data->point.y = tp.x;` |
+---
 
-> **作者注**：在本工程中，触摸 IC 坐标与 UI 坐标上下左右均相反，已在 `touchpad_read` 中完成修正。
+## 🛠️ 如何在此框架下开发新功能？
+
+1.  **定义节点元数据**：在 `BtnTree.c` 中创建一个 `struct BtnInfo_Def`，填入 UI 对象地址和回调函数。
+2.  **挂载树节点**：使用 `Tree_AddNode` 将新节点挂载到 `tree_home` 下。
+3.  **编写 Handler**：在业务逻辑文件中通过 `switch(code)` 处理 `LV_EVENT_KEY`。
+4.  **物理按键绑定**：在 `System_Key_Process` 中通过物理按键 ID 调用 `Tree_UI_Sel_Enter`。
+
+---
+
+## 🌟 总结
+
+这套框架最大的优势在于**“逻辑的一致性”**。无论 UI 视觉如何翻新，底层的按键映射和树状导航逻辑依然稳固。这种结构极度适合**精密电源、示波器、工业控制仪表**等需要高频数值调节和多级菜单切换的专业设备。
