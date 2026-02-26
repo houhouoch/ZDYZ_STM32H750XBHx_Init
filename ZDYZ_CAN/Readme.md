@@ -92,7 +92,7 @@ if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, tx_buf) != HAL_OK) {
 
 ---
 
-### 📖 开发者寄语
+### 📖 实验结果如下：
 
-FDCAN 虽然向下兼容经典 CAN，但在寄存器配置和长度表示（DLC）上与旧款 bxCAN 差异巨大。本项目通过“白名单”机制，展示了 H750 处理高频通信时的高效性。<img width="1472" height="560" alt="image" src="https://github.com/user-attachments/assets/31801b11-1c1a-4aee-902c-453e1d8fb045" />
+<img width="1472" height="560" alt="image" src="https://github.com/user-attachments/assets/31801b11-1c1a-4aee-902c-453e1d8fb045" />
 
