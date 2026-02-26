@@ -1,6 +1,6 @@
 # 🧠 LVGL 逻辑树 UI 框架：从“UI 驱动”到“逻辑驱动”的演进
 
-本仓库实现了一套基于 **LVGL v8.3** 的嵌入式 UI 框架。通过舍弃传统的底部虚拟按键（Virtual Button Bar），引入多层级逻辑树，实现了硬件按键与 UI 逻辑的深度解耦。
+本仓库实现了一套基于 **LVGL v8.3** 的嵌入式 UI 框架。通过之前项目的底部虚拟按键（Virtual Button Bar），引入多层级逻辑树，实现了硬件按键与 UI 逻辑的深度解耦。
 
 ---
 
@@ -31,11 +31,21 @@ static const Button_KeyTable_Def Btn_KeyTable[] = {
 // 状态过滤逻辑：解决“快按触发两次”的痛点
 lv_key_t Button_toKey(uint8_t buttonNum, uint8_t flag) {
     // ... 内部查表逻辑 ...
-    switch(flag) {
-        case KEY_STATE_CLICKED: return pTable->key_short; // 只有弹起才算有效点击
-        case KEY_STATE_LONGGP:  return pTable->key_long;  // 长按触发独立逻辑
-        default:                return LV_KEY_DEFAULT;    // 拦截 HOLD 状态，防止双击
-    }
+                switch(flag)
+                {
+                    case KEY_STATE_HOLD:
+                        key = Btn_KeyTable[i].key_hold;
+                        break;
+                    case KEY_STATE_CLICKED:
+                        key = Btn_KeyTable[i].key_short;
+                        break;
+                    case KEY_STATE_LONGGP:
+                        key = Btn_KeyTable[i].key_long;
+                        break;
+                    default:
+                        key = LV_KEY_DEFAULT;
+                        break;
+                }
 }
 ```
 
