@@ -1,1 +1,0 @@
-GEN_CSRCS += _Logo_alpha_569x159.c _kk_alpha_37x36.c _Icons_Menu_alpha_46x44.c _Icons_Settings_alpha_56x53.c
