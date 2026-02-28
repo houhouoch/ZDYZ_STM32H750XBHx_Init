@@ -1,98 +1,78 @@
-# 🚀 STM32H750 FDCAN 通信实验项目 (Classic CAN 模式)
+# 🚀 STM32H750 FDCAN 工业级开发笔记 (Classic CAN 模式)
 
-本项目基于 **STM32H750** 微控制器，展示了如何配置和使用 FDCAN 外设进行经典 CAN（Classic CAN）通信。通过硬件过滤器、中断接收和灵活的发送函数，实现了一个高效、可靠的嵌入式通信框架。
-
----
-
-## 📅 项目概览
-
-该实验实现了以下核心功能：
-* **多格式发送**：支持固定 ID 发送与动态 ID/长度发送。
-* **双重硬件过滤**：同时配置了标准帧（11位）与扩展帧（29位）过滤器。
+本笔记记录了从基础 FDCAN 通信到工业级稳定性优化的演进过程。重点解决了资源竞争、精细化过滤及总线故障恢复等核心问题。
 
 ---
 
-## 📖 核心知识点：什么是 CAN 通信？
+## 📅 项目概览与架构演进
 
-在深入代码之前，我们需要了解 CAN（Controller Area Network）协议的两个核心概念：
-
-### 1. 帧格式 (Frame Formats)
-本项目主要涵盖了两种帧格式：
-
-| 格式 | ID 长度 | ID 范围 | 应用场景 |
-| :--- | :--- | :--- | :--- |
-| **标准帧 (Standard)** | 11 位 | 0x000 ~ 0x7FF | 工业控制、简单命令。 |
-| **扩展帧 (Extended)** | 29 位 | 0x000 ~ 0x1FFFFFFF | 复杂网络、汽车 J1939 协议。 |
-
-
-
-**原理**：硬件通过 **IDE 位** 来区分这两种格式。本项目通过配置两个不同的过滤器赛道，确保两类数据都能被正确捕获。
-
-### 2. 帧类型 (Frame Types)
-* **数据帧 (Data Frame)**：携带实际荷载信息的“搬运工”。（本项目重点）
-* **远程帧 (Remote Frame)**：用于向其他节点“请求”数据，不带数据段。(基本未使用到)
+本项目不仅实现了基础的收发，更引入了以下深度逻辑：
+* **发送资源管理**：引入了对硬件 FIFO 状态的监控，防止在高频发送场景下的“静默丢包”。
+* **全方位错误映射**：将芯片内部复杂的错误寄存器（PSR）转换为可读的体检报告。
+* **双赛道过滤架构**：独立配置标准帧与扩展帧过滤器，兼顾通信效率与协议扩展性。
 
 ---
 
-## 🛠️ 技术实现细节
+## 📖 核心技术点深度解析
 
-### 1. 硬件门卫：过滤器配置
-为了减轻 CPU 的负担，本项目使用了硬件过滤器。只有匹配特定 ID 的报文才会触发中断。
-
+### 1. 帧格式的工程取舍 (Efficiency vs. Flexibility)
 
 
-* **标准位过滤器**：精准匹配 `0x123`。
-* **扩展位过滤器**：精准匹配 `0x1234567`。
-* **全局策略**：默认丢弃（REJECT）所有未在白名单内的报文，确保系统不受干扰。
 
-### 2. 灵活的发送接口
-项目中提供了两个维度的发送函数：
-* `FDCAN1_Send_Msg`：用于发送固定 ID 的 8 字节心跳或状态数据。
-* `FDCAN1_Send_Any_Msg`：通用接口，支持动态指定 ID 和 数据长度 (DLC)。
+| 特性 | 标准帧 (Standard) | 扩展帧 (Extended) |
+| :--- | :--- | :--- |
+| **ID 长度** | 11 位 | 29 位 |
+| **位开销** | 较低（传输更快） | 较高（额外 20bit 开销） |
+| **优先级** | 天生更高 ($IDE=0$) | 较低 ($IDE=1$) |
+| **工程建议** | 内部控制、实时数据回传（首选） | 跨设备兼容、复杂地址编码（备选） |
 
-### 3. 中断接收逻辑
-接收采用 `HAL_FDCAN_RxFifo0Callback` 回调函数。当新报文到达时：
-1.  硬件自动将数据存入 Rx FIFO0。
-2.  触发中断，由 `HAL_FDCAN_GetRxMessage` 提取数据。
-3.  通过串口（USART1）实时打印报文 ID、长度及十六进制内容。
+### 2. 硬件过滤器：从“全放行”到“精准拦截”
 
----
+过滤器不仅仅是接收 ID，更是系统的“防火墙”。
 
-## ⚠️ 开发注意事项 (Tips for Readers)
-
-1.  **数据长度解析**：在 FDCAN 中，`DataLength` 是一个 32 位宏（如 `0x00080000`）。在解析实际字节数时，需要正确处理位移或直接读取有效位。
-2.  **中断性能**：本实验在中断中使用了 `printf`。在正式工业项目中，建议将打印逻辑移至 `while(1)` 循环中，通过标志位触发，以避免阻塞总线造成丢帧。
-3.  **H7 时钟树**：FDCAN 对波特率精度要求极高。本项目配置 `NominalPrescaler = 5`，基于 HSE 时钟源，确保了 **500Kbps** 的稳定通信。
-
-
+* **掩码模式 (Mask)**：通过 `FilterID2`（掩码）决定关注哪些位。掩码为 `0x0` 代表全放行，掩码全 `1` 代表死磕特定 ID。
+* **全局配置策略**：
+    > **关键教训**：必须显式配置 `HAL_FDCAN_ConfigGlobalFilter` 为 **REJECT**。否则，即便配置了过滤器，未匹配的报文仍会通过“后门”进入系统，徒增 CPU 负担。
 
 ---
 
-## 📂 关键代码片段
+## 🛠️ 工业级稳定性保障 (Best Practices)
 
-### 动态发送实现逻辑
-```c
-// 支持 1~8 字节长度的动态匹配转换
-switch(len) {
-    case 1: TxHeader.DataLength = FDCAN_DLC_BYTES_1; break;
-    case 2: TxHeader.DataLength = FDCAN_DLC_BYTES_2; break;
-    case 3: TxHeader.DataLength = FDCAN_DLC_BYTES_3; break;
-    case 4: TxHeader.DataLength = FDCAN_DLC_BYTES_4; break;
-    case 5: TxHeader.DataLength = FDCAN_DLC_BYTES_5; break;
-    case 6: TxHeader.DataLength = FDCAN_DLC_BYTES_6; break;
-    case 7: TxHeader.DataLength = FDCAN_DLC_BYTES_7; break;
-    case 8: TxHeader.DataLength = FDCAN_DLC_BYTES_8; break;
-}
+### 1. 预防 FIFO 溢出 (Buffer Management) 📥
 
-// 将消息添加至发送 FIFO 队列
-if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, tx_buf) != HAL_OK) {
-    // 发送失败处理...
-}
-```
+在发送函数中，直接调用 HAL 库存在丢包风险。
+* **风险点**：当 `HAL_FDCAN_AddMessageToTxFifoQ` 返回 `HAL_ERROR` 时，意味着硬件队列已满。
+* **对策**：在发送前通过 `HAL_FDCAN_GetTxFifoFreeLevel` 检查空位。
+* **RTOS 进阶**：建议使用信号量 (Semaphore) 机制。任务在 FIFO 满时进入阻塞态（不占 CPU），由发送完成中断（Tx Callback）唤醒。
+
+### 2. 物理层与错误诊断 (Physical Layer & Error) 🩺
+
+
+
+通信失败时，优先检查“体温计”：
+* **120Ω 终端电阻**：缺少电阻会导致信号反射，诱发 **ACK Error**。
+* **波特率计算公式**：
+    $$Bitrate = \frac{F_{fdcan\_clk}}{Prescaler \times (1 + TS1 + TS2)}$$
+    *本项目配置示例*： $\frac{25MHz}{5 \times (1 + 15 + 4)} = 250Kbps$
+* **Bus-Off 恢复机制**：当发送错误计数器 (TEC) > 255 时，硬件会自我锁死。代码中需监控该状态并执行 `HAL_FDCAN_Start()` 进行“起死回生”操作。
 
 ---
 
-### 📖 实验结果如下：
+## 📂 进阶代码接口说明
 
-<img width="1472" height="560" alt="image" src="https://github.com/user-attachments/assets/31801b11-1c1a-4aee-902c-453e1d8fb045" />
+### 动态 ID 发送接口
+`FDCAN1_Send_Any_Msg(uint16_t std_id, uint8_t *data, uint8_t len)`
+* **优势**：自动处理数据长度转换（DLC Mapping），并在发送前清零缓冲区，避免内存中“垃圾数据”的干扰。
 
+### 接收中断回调
+`HAL_FDCAN_RxFifo0Callback`
+* **注意**：H7 系列的 FDCAN 拥有专用的 **Message RAM**。配置 `MessageRAMOffset` 时需确保不与其他外设冲突，且在访问时注意 **MPU 内存保护** 设置。
+
+---
+
+## 📈 实验现象总结
+
+通过分析助手观察，系统能够稳定实现：
+1.  标准帧与扩展帧的同周期并发。
+2.  远程帧请求后的逻辑响应。
+3.  在移除终端电阻后，串口能准确通过 `HAL_FDCAN_GetError` 报告总线异常状态。
