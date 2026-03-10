@@ -77,4 +77,5 @@ void ui_led_start_asymmetric_breathing(lv_obj_t *led_obj) {
 3.  **格式提纯**：利用在线工具将矢量图转换为高清 PNG。
     * [CloudConvert (SVG to PNG)](https://cloudconvert.com/svg-to-png)
     * [SVGtoPNG Official](https://svgtopng.com/zh/)
+   **去除背**：景remove.bg,或 Pixlr。
 4.  **导入工程**：通过 **GUI Guider** 将 PNG 转化为 LVGL C 数组，利用 H7 的 **DMA2D (Chrom-Art)** 硬件加速实现透明边缘渲染。
