@@ -12,6 +12,9 @@
         * **视觉一致性**：通过基底切片复用，确保 21 个功能按键在阴影、圆角及光影特效上达到像素级的统一。
         *基底如下所示：
         * <img width="500" height="500" alt="base3" src="https://github.com/user-attachments/assets/98c4f512-0101-4be3-8028-851907d93f90" />
+        *菜单如下：
+        *<img width="865" height="430" alt="image" src="https://github.com/user-attachments/assets/6f7e0098-c3b7-49c1-96f6-6735b9e7827b" />
+
 
 * **侧边栏 (Sidebar) 视觉进化**：
     * **图标化策略**：进入子功能节点后，侧边栏采用“图标识别”替代传统的“文字标题”。
