@@ -424,7 +424,7 @@ Tree_Def *UI_Tree_Init(void)
     tree_config=Tree_AddNode(tree_menu, &btn_config); 
     tree_protect=Tree_AddNode(tree_menu, &btn_protect);     
     // 3. 初始进入主页页面
-    Tree_UI_Sel_Enter(tree_menu, 0);
+    Tree_UI_Sel_Enter(tree_home, 0);
 
     // 打印树结构以供确认
     Tree_Print(tree_home, 0);

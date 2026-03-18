@@ -31,7 +31,7 @@ typedef struct {
 // 针对你当前 4 个按键的映射配置
 static const Button_KeyTable_Def Btn_KeyTable[] = {
     // 物理ID      | 短按触发(1)   | 长按触发(1.5s)     | 按住触发(50ms)
-    {ID_KEY0,      LV_KEY_ENTER,  LV_KEY_ENTER_LONGP,  LV_KEY_DEFAULT}, 
+    {ID_KEY0,      LV_KEY_MENU,  LV_KEY_ENTER_LONGP,  LV_KEY_DEFAULT}, 
     {ID_KEY1,      LV_KEY_ESC,    LV_KEY_ESC_LONGP,    LV_KEY_DEFAULT},
     {ID_KEY2,      LV_KEY_DOWN,   LV_KEY_DOWN,         LV_KEY_DEFAULT}, // 重点：HOLD 设为 DEFAULT
     {ID_WKUP,      LV_KEY_UP,     LV_KEY_UP,           LV_KEY_DEFAULT}, // 重点：HOLD 设为 DEFAULT
